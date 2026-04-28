@@ -1,0 +1,166 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function hasUserDoc() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function isAdmin() {
+      return hasUserDoc() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isRecruiter() {
+      return hasUserDoc() &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'recruiter';
+    }
+
+    function isStaff() {
+      return isAdmin() || isRecruiter();
+    }
+
+    function isSelf(userId) {
+      return signedIn() && request.auth.uid == userId;
+    }
+
+    function ownsInterview(interviewId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/interviews/$(interviewId)) &&
+        get(/databases/$(database)/documents/interviews/$(interviewId)).data.recruiterUID == request.auth.uid;
+    }
+
+    function ownsTest(testId) {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/tests/$(testId)) &&
+        get(/databases/$(database)/documents/tests/$(testId)).data.recruiterUID == request.auth.uid;
+    }
+
+    match /users/{userId} {
+      allow get: if isSelf(userId) || isStaff();
+      allow list: if isStaff();
+
+      allow create: if isAdmin() ||
+        (isSelf(userId) &&
+          request.resource.data.uid == userId &&
+          request.resource.data.role == 'recruiter');
+
+      allow update: if isAdmin() ||
+        (
+          isRecruiter() &&
+          resource.data.role == 'candidate' &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['accountStatus', 'updatedAt'])
+        );
+
+      allow delete: if isAdmin();
+    }
+
+    match /recruiterRequests/{requestId} {
+      allow create: if
+        request.resource.data.email is string &&
+        request.resource.data.email.size() > 0 &&
+        request.resource.data.fullname is string &&
+        request.resource.data.fullname.size() > 0 &&
+        request.resource.data.experience is number &&
+        request.resource.data.role == 'recruiter' &&
+        request.resource.data.status == 'pending';
+
+      allow get, list, update, delete: if isAdmin();
+    }
+
+    match /profiles/{userId} {
+      allow get: if isSelf(userId) || isStaff();
+      allow list: if isStaff();
+      allow create, update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /jobs/{jobId} {
+      allow get: if true;
+      allow list: if isStaff();
+      allow create: if isAdmin() || (isRecruiter() && request.resource.data.recruiterUID == request.auth.uid);
+      allow update, delete: if isAdmin() || (isRecruiter() && resource.data.recruiterUID == request.auth.uid);
+    }
+
+    match /interviews/{interviewId} {
+      allow get: if true;
+      allow list: if isStaff();
+      allow create: if isAdmin() || (isRecruiter() && request.resource.data.recruiterUID == request.auth.uid);
+      allow update, delete: if isAdmin() || (isRecruiter() && resource.data.recruiterUID == request.auth.uid);
+
+      match /attempts/{attemptId} {
+        allow create: if true;
+        allow get: if true;
+        allow list: if isStaff() || ownsInterview(interviewId);
+        allow update: if isAdmin() || ownsInterview(interviewId);
+      }
+    }
+
+    match /notifications/{notificationId} {
+      allow create: if signedIn();
+      allow get, list, update, delete: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+    }
+
+    match /transactions/{transactionId} {
+      allow create: if isStaff();
+      allow get, list: if isAdmin() ||
+        (signedIn() && resource.data.userId == request.auth.uid);
+      allow update, delete: if isAdmin();
+    }
+
+    match /blogs/{blogId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /tests/{testId} {
+      allow get: if true;
+      allow list: if isStaff();
+      allow create: if isAdmin() || (isRecruiter() && request.resource.data.recruiterUID == request.auth.uid);
+      allow update, delete: if isAdmin() || (isRecruiter() && resource.data.recruiterUID == request.auth.uid);
+    }
+
+    match /testSubmissions/{submissionId} {
+      allow create: if true;
+      allow get, list: if isAdmin() ||
+        ownsTest(resource.data.testId) ||
+        (signedIn() && resource.data.candidateUID == request.auth.uid);
+    }
+
+    match /interviewAccessTokens/{tokenId} {
+      allow create, get: if true;
+      allow list: if isStaff();
+      allow update, delete: if isAdmin();
+    }
+
+    match /contactSubmissions/{submissionId} {
+      allow create: if true;
+      allow get, list, update, delete: if isAdmin();
+    }
+
+    match /bugReports/{reportId} {
+      allow create: if true;
+      allow get, list, update, delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow create: if
+        request.resource.data.name is string &&
+        request.resource.data.name.size() > 0 &&
+        request.resource.data.review is string &&
+        request.resource.data.review.size() > 0 &&
+        request.resource.data.rating is number &&
+        request.resource.data.rating >= 1 &&
+        request.resource.data.rating <= 5 &&
+        request.resource.data.userType in ['student', 'candidate', 'recruiter'] &&
+        request.resource.data.approved == false;
+
+      allow get, list: if resource.data.approved == true || isAdmin();
+      allow update, delete: if isAdmin();
+    }
+  }
+}

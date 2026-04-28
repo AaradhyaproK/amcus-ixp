@@ -1,0 +1,8 @@
+{
+  "name": "InterviewXpert",
+  "description": "AI-Powered Interview & Analysis Platform connecting recruiters and candidates with automated video interviews and feedback.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
