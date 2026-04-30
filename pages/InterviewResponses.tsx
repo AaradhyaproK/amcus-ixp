@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
 import { useAuth } from '../context/AuthContext';
@@ -14,8 +14,17 @@ const InterviewResponses: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [customScore, setCustomScore] = useState<number>(7);
   const [scoreOperator, setScoreOperator] = useState<'gte' | 'lte'>('gte');
+  const [recruiterProfile, setRecruiterProfile] = useState<any>(null);
 
   const { user, userProfile } = useAuth();
+
+  useEffect(() => {
+    if (user?.uid) {
+      getDoc(doc(db, 'profiles', user.uid)).then(snap => {
+        if (snap.exists()) setRecruiterProfile(snap.data());
+      }).catch(console.error);
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!interviewId) return;
@@ -59,8 +68,7 @@ const InterviewResponses: React.FC = () => {
 
     return denominator === 10 ? value : (value / denominator) * 10;
   };
-
-  const getScoreDenom = (): string => '10';
+  const getScoreDenom = (_score?: any): string => '10';
 
   const filteredAndSortedSubmissions = useMemo(() => {
     return submissions
@@ -141,13 +149,13 @@ const InterviewResponses: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  const handleComposeMail = () => {
+  const generateMailContent = () => {
     if (selectedSubmissions.length === 0) {
-        return;
+        return null;
     }
 
     const submissionsToExport = filteredAndSortedSubmissions.filter(s => selectedSubmissions.includes(s.id));
-    if (submissionsToExport.length === 0) return;
+    if (submissionsToExport.length === 0) return null;
 
     const jobTitle = (submissionsToExport[0] as any).jobTitle || "the role";
     const jobTitleWithId = `${jobTitle} - ${interviewId}`;
@@ -159,9 +167,9 @@ const InterviewResponses: React.FC = () => {
     body += `I am sharing resumes of the following candidates for the post of ${jobTitleWithId}:\n\n`;
 
     submissionsToExport.forEach((sub, index) => {
-        const info = sub.candidateInfo;
-        const currentSalaryPM = info?.currentSalary ? Math.round((parseFloat(info.currentSalary) * 100000) / 12).toLocaleString('en-IN') : 'N/A';
-        const expectedSalaryPM = info?.expectedSalary ? Math.round((parseFloat(info.expectedSalary) * 100000) / 12).toLocaleString('en-IN') : 'N/A';
+        const info = sub.candidateInfo as any;
+        const currentSalary = info?.currentSalary || 'N/A';
+        const expectedSalary = info?.expectedSalary || 'N/A';
         const reportUrl = `${window.location.origin}/#/report/${sub.interviewId}/${sub.id}`;
         
         body += `--- Candidate ${index + 1} ---\n`;
@@ -172,8 +180,8 @@ const InterviewResponses: React.FC = () => {
         body += `Interview Availability: N/A\n`; // Placeholder as per example
         body += `Working Status: ${info?.workStatus === 'working' ? 'Working' : 'Not Working'}\n`;
         body += `Work Experience: ${info?.totalExperienceYears ? `${info.totalExperienceYears}y ${info.totalExperienceMonths || '0'}m` : 'N/A'}\n`;
-        body += `Current Salary (PM): ₹${currentSalaryPM}\n`;
-        body += `Expected Salary (PM): ₹${expectedSalaryPM}\n`;
+        body += `Current Salary: ${currentSalary}\n`;
+        body += `Expected Salary: ${expectedSalary}\n`;
         body += `Notice Period: N/A\n`; // Placeholder as per example
         body += `Resume Link: ${sub.candidateResumeURL || 'N/A'}\n`;
         body += `Report Link: ${reportUrl}\n`;
@@ -186,19 +194,43 @@ const InterviewResponses: React.FC = () => {
     body += `The Job details shared with the candidates are on the following link:\n`;
     body += `Link: ${jobLink}\n\n`;
 
-    // Recruiter details from AuthContext
-    body += `Recruiter Name: ${userProfile?.fullname || 'Team DSource'}\n`;
-    body += `Contact Number: ${userProfile?.phone || 'N/A'}\n`;
+    // Recruiter details from AuthContext and Profile
+    const recruiterName = recruiterProfile?.displayName || (userProfile as any)?.fullname || userProfile?.name || 'Team DSource';
+    const recruiterPhone = recruiterProfile?.phoneNumber || (userProfile as any)?.phone || 'N/A';
+    body += `Recruiter Name: ${recruiterName}\n`;
+    body += `Contact Number: ${recruiterPhone}\n`;
     body += `Email id: ${user?.email || 'N/A'}\n\n`;
 
     body += `Do let us know the interview schedule for the shortlisted candidates.\n\n`;
     body += `Thanks & Regards.`;
 
+    return { subject, body };
+  };
+
+  const handleComposeMail = () => {
+    const content = generateMailContent();
+    if (!content) return;
+    
+    const { subject, body } = content;
     const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     try {
       window.location.href = mailtoLink;
     } catch (e) {
       console.error("Failed to open mail client", e);
+    }
+  };
+
+  const handleCopyMailContent = async () => {
+    const content = generateMailContent();
+    if (!content) return;
+    
+    const { subject, body } = content;
+    try {
+      await navigator.clipboard.writeText(`Subject: ${subject}\n\n${body}`);
+      alert("Mail content copied to clipboard!");
+    } catch (err) {
+      console.error("Failed to copy text: ", err);
+      alert("Failed to copy mail content. Please try again.");
     }
   };
 
@@ -250,6 +282,13 @@ const InterviewResponses: React.FC = () => {
             className="w-full md:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <i className="fas fa-envelope"></i> Compose Mail
+          </button>
+          <button
+            disabled={selectedSubmissions.length === 0}
+            onClick={handleCopyMailContent}
+            className="w-full md:w-auto px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg focus:ring-2 focus:ring-indigo-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i className="fas fa-copy"></i> Copy Mail Content
           </button>
           <button
             disabled={selectedSubmissions.length === 0}
