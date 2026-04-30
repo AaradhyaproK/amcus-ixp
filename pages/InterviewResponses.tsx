@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 const InterviewResponses: React.FC = () => {
   const { interviewId } = useParams<{ interviewId: string }>();
@@ -13,6 +14,8 @@ const InterviewResponses: React.FC = () => {
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [customScore, setCustomScore] = useState<number>(7);
   const [scoreOperator, setScoreOperator] = useState<'gte' | 'lte'>('gte');
+
+  const { user, userProfile } = useAuth();
 
   useEffect(() => {
     if (!interviewId) return;
@@ -138,6 +141,67 @@ const InterviewResponses: React.FC = () => {
     document.body.removeChild(link);
   };
 
+  const handleComposeMail = () => {
+    if (selectedSubmissions.length === 0) {
+        return;
+    }
+
+    const submissionsToExport = filteredAndSortedSubmissions.filter(s => selectedSubmissions.includes(s.id));
+    if (submissionsToExport.length === 0) return;
+
+    const jobTitle = (submissionsToExport[0] as any).jobTitle || "the role";
+    const jobTitleWithId = `${jobTitle} - ${interviewId}`;
+
+    const subject = `Resumes for ${jobTitleWithId}`;
+
+    let body = `Dear Sir / Mam,\n\n`;
+    body += `Greetings of the day from DSource Training & Placement Services!\n\n`;
+    body += `I am sharing resumes of the following candidates for the post of ${jobTitleWithId}:\n\n`;
+
+    submissionsToExport.forEach((sub, index) => {
+        const info = sub.candidateInfo;
+        const currentSalaryPM = info?.currentSalary ? Math.round((parseFloat(info.currentSalary) * 100000) / 12).toLocaleString('en-IN') : 'N/A';
+        const expectedSalaryPM = info?.expectedSalary ? Math.round((parseFloat(info.expectedSalary) * 100000) / 12).toLocaleString('en-IN') : 'N/A';
+        const reportUrl = `${window.location.origin}/#/report/${sub.interviewId}/${sub.id}`;
+        
+        body += `--- Candidate ${index + 1} ---\n`;
+        body += `Name: ${info?.name || 'N/A'}\n`;
+        body += `Email: ${info?.email || 'N/A'}\n`;
+        body += `Phone: ${info?.phone || 'N/A'}\n`;
+        body += `Overall Score: ${getScoreValue(sub.score).toFixed(1)}/10\n`;
+        body += `Interview Availability: N/A\n`; // Placeholder as per example
+        body += `Working Status: ${info?.workStatus === 'working' ? 'Working' : 'Not Working'}\n`;
+        body += `Work Experience: ${info?.totalExperienceYears ? `${info.totalExperienceYears}y ${info.totalExperienceMonths || '0'}m` : 'N/A'}\n`;
+        body += `Current Salary (PM): ₹${currentSalaryPM}\n`;
+        body += `Expected Salary (PM): ₹${expectedSalaryPM}\n`;
+        body += `Notice Period: N/A\n`; // Placeholder as per example
+        body += `Resume Link: ${sub.candidateResumeURL || 'N/A'}\n`;
+        body += `Report Link: ${reportUrl}\n`;
+        body += `\n`; // Separator between candidates
+    });
+
+    body += `The candidates are made aware about the job profile, location & timing through the following link.\n`;
+    
+    const jobLink = `${window.location.origin}/#/interview/${interviewId}`;
+    body += `The Job details shared with the candidates are on the following link:\n`;
+    body += `Link: ${jobLink}\n\n`;
+
+    // Recruiter details from AuthContext
+    body += `Recruiter Name: ${userProfile?.fullname || 'Team DSource'}\n`;
+    body += `Contact Number: ${userProfile?.phone || 'N/A'}\n`;
+    body += `Email id: ${user?.email || 'N/A'}\n\n`;
+
+    body += `Do let us know the interview schedule for the shortlisted candidates.\n\n`;
+    body += `Thanks & Regards.`;
+
+    const mailtoLink = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    try {
+      window.location.href = mailtoLink;
+    } catch (e) {
+      console.error("Failed to open mail client", e);
+    }
+  };
+
   const parseFeedback = (feedback: unknown) => {
     if (typeof feedback !== 'string') return { resumeAnalysis: 'N/A', answerQuality: 'N/A', overallEvaluation: 'N/A' };
     const resumeMatch = feedback.match(/\*\*Resume Analysis:\*\*([\s\S]*?)(?=\*\*Answer Quality:\*\*|$)/);
@@ -179,13 +243,22 @@ const InterviewResponses: React.FC = () => {
           <option value="desc">Score: High to Low</option>
           <option value="asc">Score: Low to High</option>
         </select>
-        <button
-          disabled={selectedSubmissions.length === 0}
-          onClick={exportToCSV}
-          className="w-full md:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <i className="fas fa-file-excel"></i> Export {selectedSubmissions.length > 0 ? `${selectedSubmissions.length} Selected` : 'CSV'}
-        </button>
+        <div className="flex gap-2">
+          <button
+            disabled={selectedSubmissions.length === 0}
+            onClick={handleComposeMail}
+            className="w-full md:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg focus:ring-2 focus:ring-blue-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i className="fas fa-envelope"></i> Compose Mail
+          </button>
+          <button
+            disabled={selectedSubmissions.length === 0}
+            onClick={exportToCSV}
+            className="w-full md:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <i className="fas fa-file-excel"></i> Export CSV {selectedSubmissions.length > 0 ? `(${selectedSubmissions.length})` : ''}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-100 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
