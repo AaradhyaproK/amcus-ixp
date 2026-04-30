@@ -3,14 +3,16 @@ import { useParams, Link } from 'react-router-dom';
 import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
-import { createPortal } from 'react-dom';
 
 const InterviewResponses: React.FC = () => {
   const { interviewId } = useParams<{ interviewId: string }>();
   const [submissions, setSubmissions] = useState<InterviewSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedSubmissions, setSelectedSubmissions] = useState<string[]>([]);
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [customScore, setCustomScore] = useState<number>(7);
+  const [scoreOperator, setScoreOperator] = useState<'gte' | 'lte'>('gte');
 
   useEffect(() => {
     if (!interviewId) return;
@@ -70,15 +72,50 @@ const InterviewResponses: React.FC = () => {
       });
   }, [submissions, searchTerm, sortOrder]);
 
+  const handleSelectSubmission = (submissionId: string) => {
+    setSelectedSubmissions(prev => 
+        prev.includes(submissionId) 
+            ? prev.filter(id => id !== submissionId)
+            : [...prev, submissionId]
+    );
+  };
+
+  const handleAutoSelect = (type: 'top10' | 'top20' | 'all' | 'none') => {
+    const submittedCandidates = filteredAndSortedSubmissions.filter(s => s.submittedAt);
+    switch (type) {
+        case 'top10':
+            setSelectedSubmissions(submittedCandidates.slice(0, 10).map(s => s.id));
+            break;
+        case 'top20':
+            setSelectedSubmissions(submittedCandidates.slice(0, 20).map(s => s.id));
+            break;
+        case 'all':
+            setSelectedSubmissions(submittedCandidates.map(s => s.id));
+            break;
+        case 'none':
+            setSelectedSubmissions([]);
+            break;
+    }
+  };
+
+  const handleCustomScoreSelect = () => {
+    const submittedCandidates = filteredAndSortedSubmissions.filter(s => s.submittedAt);
+    if (scoreOperator === 'gte') {
+        setSelectedSubmissions(submittedCandidates.filter(s => getScoreValue(s.score) >= customScore).map(s => s.id));
+    } else {
+        setSelectedSubmissions(submittedCandidates.filter(s => getScoreValue(s.score) <= customScore).map(s => s.id));
+    }
+  };
 
   const exportToCSV = () => {
-    const jobNameForFile = filteredAndSortedSubmissions.length > 0 ? ((filteredAndSortedSubmissions[0] as any).jobTitle || "Job") : "Job";
+    const submissionsToExport = filteredAndSortedSubmissions.filter(s => selectedSubmissions.includes(s.id));
+    const jobNameForFile = submissionsToExport.length > 0 ? ((submissionsToExport[0] as any).jobTitle || "Job") : "Job";
     const safeJobNameFile = `${jobNameForFile}`.replace(/[^a-zA-Z0-9_\-]/g, '_').substring(0, 30);
     const headers = ["Job Name", "Candidate Name", "Contact", "Email", "Resume Link", "Overall Score", "Report Link"];
     
     const csvContent = [
       headers.join(","),
-      ...filteredAndSortedSubmissions.map(sub => {
+      ...submissionsToExport.map(sub => {
         const jobName = `"${((sub as any).jobTitle || "Unknown Role").replace(/"/g, '""')}"`;
         const name = `"${(sub.candidateInfo?.name || "Unknown").replace(/"/g, '""')}"`;
         const contact = `"${(sub.candidateInfo?.phone || "N/A").replace(/"/g, '""')}"`;
@@ -143,11 +180,43 @@ const InterviewResponses: React.FC = () => {
           <option value="asc">Score: Low to High</option>
         </select>
         <button
+          disabled={selectedSubmissions.length === 0}
           onClick={exportToCSV}
-          className="w-full md:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
+          className="w-full md:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <i className="fas fa-file-excel"></i> Export CSV
+          <i className="fas fa-file-excel"></i> Export {selectedSubmissions.length > 0 ? `${selectedSubmissions.length} Selected` : 'CSV'}
         </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-100 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
+        <span className="text-sm font-bold mr-2 text-gray-700 dark:text-gray-300">Auto-select:</span>
+        <button onClick={() => handleAutoSelect('top10')} className="px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Top 10</button>
+        <button onClick={() => handleAutoSelect('top20')} className="px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Top 20</button>
+        
+        <div className="flex items-center gap-1 bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 p-0.5">
+            <select 
+                value={scoreOperator} 
+                onChange={e => setScoreOperator(e.target.value as 'gte' | 'lte')}
+                className="bg-transparent text-xs font-medium border-none focus:ring-0 h-full py-1 pl-2 pr-1 appearance-none dark:bg-slate-700"
+            >
+                <option value="gte">Score ≥</option>
+                <option value="lte">Score ≤</option>
+            </select>
+            <input 
+                type="number" 
+                value={customScore}
+                onChange={e => setCustomScore(Number(e.target.value))}
+                className="w-12 text-center bg-gray-50 dark:bg-slate-600 border-x border-gray-200 dark:border-slate-500 text-xs font-bold h-full py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                min="0" max="10" step="0.5"
+            />
+            <button onClick={handleCustomScoreSelect} className="px-2 text-xs font-bold text-primary hover:bg-primary/10 rounded-sm h-full">
+                Select
+            </button>
+        </div>
+
+        <div className="flex-grow"></div>
+        <button onClick={() => handleAutoSelect('all')} className="px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Select All</button>
+        <button onClick={() => handleAutoSelect('none')} className="px-3 py-1 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-md shadow-sm border border-red-200 dark:border-red-600 hover:bg-red-200 dark:hover:bg-red-800/50">Clear</button>
       </div>
 
       {filteredAndSortedSubmissions.length === 0 ? (
@@ -158,13 +227,21 @@ const InterviewResponses: React.FC = () => {
       ) : (
         <div className="space-y-6">
             {filteredAndSortedSubmissions.map(submission => {
+                const isSelected = selectedSubmissions.includes(submission.id);
                 return (
-                  <Link 
-                    to={`/report/${interviewId}/${submission.id}`}
+                  <div 
                     key={submission.id} 
-                    className="block bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm hover:shadow-md hover:border-primary/50 dark:hover:border-primary/50 transition-all duration-300"
+                    className={`relative bg-white dark:bg-[#111] rounded-2xl border ${isSelected ? 'border-primary ring-2 ring-primary/20' : 'border-gray-200 dark:border-white/5'} shadow-sm hover:shadow-md hover:border-primary/50 dark:hover:border-primary/50 transition-all duration-300`}
                   >
-                      <div className="p-6">
+                      <div className="absolute top-6 left-6 z-10">
+                          <input 
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => handleSelectSubmission(submission.id)}
+                              className="h-5 w-5 rounded border-gray-300 dark:border-gray-600 text-primary focus:ring-primary dark:bg-gray-700"
+                          />
+                      </div>
+                      <div className="p-6 pl-16">
                         <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
                             <div>
                                 <h3 className="font-bold text-xl text-gray-900 dark:text-white capitalize">{submission.candidateInfo?.name || 'Unknown Candidate'}</h3>
@@ -188,12 +265,12 @@ const InterviewResponses: React.FC = () => {
                             </div>
                         </div>
                         <div className="mt-5 pt-4 border-t border-gray-100 dark:border-white/5 flex justify-end">
-                            <span className="text-primary font-bold text-sm flex items-center gap-2 hover:gap-3 transition-all">
+                            <Link to={`/report/${interviewId}/${submission.id}`} className="text-primary font-bold text-sm flex items-center gap-2 hover:gap-3 transition-all">
                                 View Detailed Report <i className="fas fa-arrow-right"></i>
-                            </span>
+                            </Link>
                         </div>
                       </div>
-                  </Link>
+                  </div>
                 )
             })}
         </div>
