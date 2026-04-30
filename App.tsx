@@ -14,6 +14,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import AdminProfile from './pages/AdminProfile';
 import Blogs from './pages/Blogs';
 import AdminBlogs from './pages/AdminBlogs';
+import AdminStats from './pages/AdminStats';
 import BlogDetail from './pages/BlogDetail';
 import RecruiterTests from './pages/RecruiterTests';
 import CreateTest from './pages/CreateTest';
@@ -139,6 +140,11 @@ const App: React.FC = () => {
             <Route path="admin/blogs" element={
               <ThemeProvider>
                 <ProtectedRoute role="admin"><AdminBlogs /></ProtectedRoute>
+              </ThemeProvider>
+            } />
+            <Route path="admin/stats" element={
+              <ThemeProvider>
+                <ProtectedRoute role="admin"><AdminStats /></ProtectedRoute>
               </ThemeProvider>
             } />
 

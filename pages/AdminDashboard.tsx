@@ -7,7 +7,7 @@ import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth'
 import { db, auth } from '../services/firebase';
 import { RevenueAreaChart, UserPieChart, JobBarChart } from '../components/AdminCharts';
 import { GShapeAnimation } from '../components/AdminAnimations';
-import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star } from 'lucide-react';
+import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useMessageBox } from '../components/MessageBox';
 import Logo from '../components/Logo';
@@ -551,12 +551,14 @@ const AdminDashboard: React.FC = () => {
               { id: 'transactions', label: 'Transactions', icon: DollarSign },
               { id: 'reviews', label: 'Reviews', icon: Star, count: allReviews.filter(r => !r.approved).length },
               { id: 'submissions', label: 'Inbox', icon: MessageSquareIcon, count: contactSubmissions.length + bugReports.length },
-              { id: 'blogs', label: 'Manage Blogs', icon: BookOpen }
+              { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
+              { id: 'stats', label: 'Platform Stats', icon: Activity }
             ].map(item => (
               <button
                 key={item.id}
                 onClick={() => {
                   if (item.id === 'blogs') navigate('/admin/blogs');
+                  else if (item.id === 'stats') navigate('/admin/stats');
                   else setActiveTab(item.id as any); 
                   setIsMobileSidebarOpen(false); 
                 }}
@@ -589,12 +591,14 @@ const AdminDashboard: React.FC = () => {
             { id: 'transactions', label: 'Transactions', icon: DollarSign },
             { id: 'reviews', label: 'Reviews', icon: Star, count: allReviews.filter(r => !r.approved).length },
             { id: 'submissions', label: 'Inbox', icon: MessageSquareIcon, count: contactSubmissions.length + bugReports.length },
-            { id: 'blogs', label: 'Manage Blogs', icon: BookOpen }
+            { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
+            { id: 'stats', label: 'Platform Stats', icon: Activity }
           ].map(item => (
             <button
               key={item.id}
               onClick={() => { 
                 if (item.id === 'blogs') navigate('/admin/blogs');
+                else if (item.id === 'stats') navigate('/admin/stats');
                 else setActiveTab(item.id as any);
               }}
               className={`flex items-center justify-between px-4 py-3 rounded-xl text-sm font-medium transition-all ${activeTab === item.id
