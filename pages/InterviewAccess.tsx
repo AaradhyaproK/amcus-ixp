@@ -12,6 +12,7 @@ const InterviewAccess: React.FC = () => {
   const [interviewTitle, setInterviewTitle] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isExpired, setIsExpired] = useState(false);
 
   useEffect(() => {
     const fetchInterviewTitle = async () => {
@@ -21,6 +22,15 @@ const InterviewAccess: React.FC = () => {
         if (interviewDoc.exists()) {
           const interviewData = interviewDoc.data() as Interview;
           setInterviewTitle(interviewData.title);
+          
+          if ((interviewData as any).deadline) {
+            const deadlineDate = new Date((interviewData as any).deadline);
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            if (deadlineDate < today) {
+              setIsExpired(true);
+            }
+          }
         } else {
           setError('Interview not found.');
         }
@@ -74,7 +84,23 @@ const InterviewAccess: React.FC = () => {
           <p className="text-red-500 bg-red-100 dark:bg-red-900/20 p-3 rounded-lg animate-pulse">{error}</p>
         )}
 
-        {interviewTitle ? (
+        {isExpired ? (
+          <div className="space-y-4 py-4">
+            <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </div>
+            <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
+              The job link has expired.
+            </p>
+            <p className="text-gray-600 dark:text-gray-400 pb-2">
+              If you believe this is an error or need further assistance, please contact DSource Support.
+            </p>
+            <div className="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-200 dark:border-white/10">
+              <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">Support Contact</p>
+              <p className="text-lg font-black text-primary">9762588623 / 8484888632</p>
+            </div>
+          </div>
+        ) : interviewTitle ? (
           <div className="space-y-6">
             <p className="text-gray-600 dark:text-gray-300">
               You have been invited to take an interview for the position of <strong>{interviewTitle}</strong>. 
