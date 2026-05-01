@@ -306,6 +306,12 @@ const AdminStats: React.FC = () => {
             <h1 className="text-4xl font-black text-black uppercase tracking-widest mb-4">INTERVIEW REPORT</h1>
             <div className="flex justify-end gap-8 text-xs">
               <div className="text-right">
+                <p className="text-gray-500 uppercase tracking-widest font-bold mb-0.5">Report Period</p>
+                <p className="text-black font-black text-sm">
+                  {new Date(Number(selectedMonth.split('-')[0]), Number(selectedMonth.split('-')[1]) - 1).toLocaleString('default', { month: 'long' })} {selectedMonth.split('-')[0]}
+                </p>
+              </div>
+              <div className="text-right">
                 <p className="text-gray-500 uppercase tracking-widest font-bold mb-0.5">Date Generated</p>
                 <p className="text-black font-black text-sm">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
               </div>
@@ -380,6 +386,12 @@ const AdminStats: React.FC = () => {
           <div className="text-right">
             <h1 className="text-4xl font-black text-black uppercase tracking-widest mb-4">RESPONSES REPORT</h1>
             <div className="flex justify-end gap-8 text-xs">
+              <div className="text-right">
+                <p className="text-gray-500 uppercase tracking-widest font-bold mb-0.5">Report Period</p>
+                <p className="text-black font-black text-sm">
+                  {new Date(Number(selectedMonth.split('-')[0]), Number(selectedMonth.split('-')[1]) - 1).toLocaleString('default', { month: 'long' })} {selectedMonth.split('-')[0]}
+                </p>
+              </div>
               <div className="text-right">
                 <p className="text-gray-500 uppercase tracking-widest font-bold mb-0.5">Date Generated</p>
                 <p className="text-black font-black text-sm">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
