@@ -13,6 +13,14 @@ interface InterviewDetail {
   responses: number;
 }
 
+interface ResponseDetail {
+  id: string;
+  candidateName: string;
+  candidateEmail: string;
+  interviewTitle: string;
+  submittedAt: any;
+}
+
 const AdminStats: React.FC = () => {
   const navigate = useNavigate();
   const { isDark } = useTheme();
@@ -21,12 +29,19 @@ const AdminStats: React.FC = () => {
   const [responsesStats, setResponsesStats] = useState({ today: 0, thisMonth: 0, total: 0 });
   const [interviewsList, setInterviewsList] = useState<InterviewDetail[]>([]);
   const [showInterviewsModal, setShowInterviewsModal] = useState(false);
-  const [printMode, setPrintMode] = useState<'invoice' | 'summary'>('invoice');
+  const [responsesList, setResponsesList] = useState<ResponseDetail[]>([]);
+  const [showResponsesModal, setShowResponsesModal] = useState(false);
+  const [printMode, setPrintMode] = useState<'invoice' | 'summary' | 'responses'>('invoice');
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [loading, setLoading] = useState(true);
 
   const handlePrintSummary = () => {
     setPrintMode('summary');
+    setTimeout(() => window.print(), 100);
+  };
+
+  const handlePrintResponses = () => {
+    setPrintMode('responses');
     setTimeout(() => window.print(), 100);
   };
 
@@ -95,6 +110,7 @@ const AdminStats: React.FC = () => {
         let respToday = 0;
         let respMonth = 0;
         let respTotal = 0;
+        let tempResponses: ResponseDetail[] = [];
 
         attemptSnaps.forEach((snap, idx) => {
           respTotal += snap.size;
@@ -109,6 +125,13 @@ const AdminStats: React.FC = () => {
               if (date >= startOfSelectedMonth && date <= endOfSelectedMonth) {
                 respMonth++;
                 interviewRespMonth++;
+                tempResponses.push({
+                  id: doc.id,
+                  candidateName: data.candidateInfo?.name || 'Unknown Candidate',
+                  candidateEmail: data.candidateInfo?.email || 'N/A',
+                  interviewTitle: tempInterviews[idx].title,
+                  submittedAt: timestamp || null
+                });
               }
             }
           });
@@ -116,6 +139,12 @@ const AdminStats: React.FC = () => {
           tempInterviews[idx].responses = interviewRespMonth;
         });
         
+        tempResponses.sort((a, b) => {
+          const dateA = a.submittedAt?.toDate ? a.submittedAt.toDate().getTime() : 0;
+          const dateB = b.submittedAt?.toDate ? b.submittedAt.toDate().getTime() : 0;
+          return dateB - dateA;
+        });
+
         const filteredInterviews = tempInterviews.filter(inv => {
            const invDate = inv.createdAt?.toDate ? inv.createdAt.toDate() : null;
            const createdInMonth = invDate && invDate >= startOfSelectedMonth && invDate <= endOfSelectedMonth;
@@ -125,6 +154,7 @@ const AdminStats: React.FC = () => {
         if (isMounted) {
           setResponsesStats({ today: respToday, thisMonth: respMonth, total: respTotal });
           setInterviewsList(filteredInterviews);
+          setResponsesList(tempResponses);
         }
       } catch (error) {
         console.error("Error fetching responses:", error);
@@ -334,6 +364,80 @@ const AdminStats: React.FC = () => {
     );
   };
 
+  const renderResponsesReportContent = () => {
+    return (
+      <div className="text-black font-sans w-full h-full flex flex-col bg-white">
+        {/* Header */}
+        <div className="flex justify-between items-start border-b-4 border-black pb-4 mb-6">
+          <div>
+            <div className="w-36 mb-2 invert">
+              <Logo className="w-full" />
+            </div>
+            <p className="text-black font-bold text-sm">interviewxpert.in</p>
+            <p className="text-gray-800 font-medium text-sm">hackathon746@gmail.com</p>
+            <p className="text-gray-800 font-medium text-sm">+91 95455 56045</p>
+          </div>
+          <div className="text-right">
+            <h1 className="text-4xl font-black text-black uppercase tracking-widest mb-4">RESPONSES REPORT</h1>
+            <div className="flex justify-end gap-8 text-xs">
+              <div className="text-right">
+                <p className="text-gray-500 uppercase tracking-widest font-bold mb-0.5">Date Generated</p>
+                <p className="text-black font-black text-sm">{new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        {/* Summary Info */}
+        <div className="flex justify-between mb-8 border-2 border-black p-4">
+          <div>
+            <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1">Total Candidate Responses</p>
+            <h3 className="text-xl font-black text-black uppercase leading-tight">{responsesList.length}</h3>
+          </div>
+        </div>
+
+        {/* Table */}
+        <table className="w-full text-left border-collapse mb-6 flex-1">
+          <thead>
+            <tr className="border-b-2 border-black text-[10px] uppercase tracking-widest text-black">
+              <th className="py-2 font-black w-12">#</th>
+              <th className="py-2 font-black">Candidate</th>
+              <th className="py-2 font-black">Interview Title</th>
+              <th className="py-2 font-black text-right w-32">Date Submitted</th>
+            </tr>
+          </thead>
+          <tbody>
+            {responsesList.map((item, index) => (
+              <tr key={item.id} className="border-b border-gray-300">
+                <td className="py-3 text-sm text-gray-600 font-medium">{index + 1}</td>
+                <td className="py-3 pr-4">
+                  <p className="font-bold text-black text-base leading-tight">{item.candidateName}</p>
+                  <p className="text-xs text-gray-500">{item.candidateEmail}</p>
+                </td>
+                <td className="py-3 pr-4">
+                  <p className="text-sm font-medium text-gray-800">{item.interviewTitle}</p>
+                </td>
+                <td className="py-3 text-right text-sm font-medium text-black">
+                   {item.submittedAt?.toDate ? item.submittedAt.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                </td>
+              </tr>
+            ))}
+            {responsesList.length === 0 && (
+              <tr>
+                <td colSpan={4} className="py-6 text-center text-gray-500 font-medium">No responses found.</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <div className="pt-4 text-center mt-auto border-t-2 border-black">
+          <h4 className="font-black text-black mb-1 uppercase tracking-widest text-sm">DSource Platform Statistics</h4>
+          <p className="text-xs font-bold text-gray-500">This is a system-generated report.</p>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <>
       <div className={`min-h-screen ${isDark ? 'bg-[#050505] text-white' : 'bg-gray-50 text-gray-900'} font-sans print:hidden`}>
@@ -415,7 +519,10 @@ const AdminStats: React.FC = () => {
               </div>
               
               {/* Responses */}
-              <div className={`p-8 rounded-2xl border ${isDark ? 'bg-[#111] border-white/10' : 'bg-white border-gray-200'} shadow-xl flex flex-col items-center justify-center transition-transform hover:scale-[1.02]`}>
+              <div 
+                onClick={() => setShowResponsesModal(true)}
+                className={`cursor-pointer p-8 rounded-2xl border ${isDark ? 'bg-[#111] border-white/10 hover:border-emerald-500/50' : 'bg-white border-gray-200 hover:border-emerald-500/50'} shadow-xl flex flex-col items-center justify-center transition-all hover:scale-[1.02]`}
+              >
                 <div className="p-4 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-full mb-3 shadow-inner">
                   <Users size={40} />
                 </div>
@@ -547,7 +654,7 @@ const AdminStats: React.FC = () => {
 
       {/* Print-Only Actual Layout (Used exclusively during window.print()) */}
       <div className="hidden print:block bg-white text-black p-10 font-sans min-h-screen max-w-4xl mx-auto">
-        {printMode === 'invoice' ? renderInvoiceContent() : renderSummaryReportContent()}
+        {printMode === 'invoice' ? renderInvoiceContent() : printMode === 'summary' ? renderSummaryReportContent() : renderResponsesReportContent()}
       </div>
 
       {/* Interviews List Modal */}
@@ -595,6 +702,62 @@ const AdminStats: React.FC = () => {
                       <tr>
                          <td colSpan={3} className="py-12 text-center text-gray-500 dark:text-gray-400 font-medium">
                            No interviews posted yet.
+                         </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Responses List Modal */}
+      {showResponsesModal && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4 sm:p-6 print:hidden backdrop-blur-sm transition-opacity animate-fade-in">
+          <div className={`rounded-2xl max-w-5xl w-full max-h-[80vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in-up ${isDark ? 'bg-[#111] border border-white/10' : 'bg-white'}`}>
+             <div className="flex justify-between items-center p-6 border-b border-gray-200 dark:border-white/10 shrink-0">
+                <h3 className="text-xl font-bold dark:text-white flex items-center gap-2">
+                  <Users size={20} className="text-emerald-500" />
+                  Candidate Responses
+                </h3>
+                <div className="flex items-center gap-3">
+                  <button onClick={handlePrintResponses} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold shadow-md hover:bg-blue-700 transition-colors">
+                    <Printer size={16} /> Download Report
+                  </button>
+                  <button onClick={() => setShowResponsesModal(false)} className="text-gray-400 hover:text-red-500 transition-colors p-1 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20">
+                     <X size={24} />
+                  </button>
+                </div>
+             </div>
+             <div className="p-6 overflow-y-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                     <tr className="border-b border-gray-200 dark:border-white/10 text-gray-500 dark:text-gray-400 text-sm uppercase tracking-wider">
+                        <th className="pb-3 font-bold">Candidate</th>
+                        <th className="pb-3 font-bold">Interview Title</th>
+                        <th className="pb-3 font-bold text-right">Date Submitted</th>
+                     </tr>
+                  </thead>
+                  <tbody>
+                    {responsesList.map(item => (
+                      <tr key={item.id} className="border-b border-gray-100 dark:border-white/5 hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                         <td className="py-4">
+                            <p className="dark:text-white font-bold">{item.candidateName}</p>
+                            <p className="text-xs text-gray-500">{item.candidateEmail}</p>
+                         </td>
+                         <td className="py-4 text-gray-700 dark:text-gray-300 font-medium">
+                            {item.interviewTitle}
+                         </td>
+                         <td className="py-4 text-right text-gray-500 dark:text-gray-400 text-sm font-medium">
+                            {item.submittedAt?.toDate ? item.submittedAt.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+                         </td>
+                      </tr>
+                    ))}
+                    {responsesList.length === 0 && (
+                      <tr>
+                         <td colSpan={3} className="py-12 text-center text-gray-500 dark:text-gray-400 font-medium">
+                           No responses found in this period.
                          </td>
                       </tr>
                     )}
