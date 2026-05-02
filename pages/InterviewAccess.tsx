@@ -76,48 +76,50 @@ const InterviewAccess: React.FC = () => {
   };
 
   return (
-    <div className="flex justify-center items-center h-screen bg-gray-100 dark:bg-gray-900">
-      <div className="access-container w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg text-center">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Access Interview</h1>
+    <div className="access-screen flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 px-4 py-8">
+      <div className="access-container access-screen-card w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg text-center">
+        <div className="access-screen-header">
+          <p className="access-screen-kicker">Interview access</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Enter access code</h1>
+        </div>
         
         {error && (
-          <p className="text-red-500 bg-red-100 dark:bg-red-900/20 p-3 rounded-lg animate-pulse">{error}</p>
+          <p className="access-screen-alert text-red-500 bg-red-100 dark:bg-red-900/20 p-3 rounded-lg">{error}</p>
         )}
 
         {isExpired ? (
-          <div className="space-y-4 py-4">
-            <div className="mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
+          <div className="access-screen-expired space-y-4 py-4">
+            <div className="access-screen-icon mx-auto w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mb-4">
               <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
             <p className="text-lg font-bold text-gray-800 dark:text-gray-200">
-              The job link has expired.
+              Link expired
             </p>
             <p className="text-gray-600 dark:text-gray-400 pb-2">
-              If you believe this is an error or need further assistance, please contact DSource Support.
+              Contact support if you need a new access link.
             </p>
-            <div className="bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-200 dark:border-white/10">
-              <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">Support Contact</p>
+            <div className="access-screen-support bg-gray-50 dark:bg-[#1a1a1a] p-4 rounded-xl border border-gray-200 dark:border-white/10">
+              <p className="text-sm font-bold text-gray-500 uppercase tracking-widest mb-1">Support</p>
               <p className="text-lg font-black text-primary">9762588623 / 8484888632</p>
             </div>
           </div>
         ) : interviewTitle ? (
-          <div className="space-y-6">
+          <div className="access-screen-body space-y-6">
             <p className="text-gray-600 dark:text-gray-300">
-              You have been invited to take an interview for the position of <strong>{interviewTitle}</strong>. 
-              Please enter the access code provided to you to start the interview.
+              Continue to the <strong>{interviewTitle}</strong> interview.
             </p>
             <div className="flex flex-col space-y-4">
               <input
                 type="text"
-                placeholder="ENTER ACCESS CODE"
+                placeholder="Enter access code"
                 value={accessCode}
                 onChange={(e) => setAccessCode(e.target.value.toUpperCase())}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-center tracking-widest font-mono"
+                className="access-screen-input w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-center tracking-widest font-mono"
               />
               <button 
                 onClick={handleStartInterview}
                 disabled={isLoading}
-                className="w-full bg-primary hover:bg-primary-dark text-white dark:text-black font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="access-screen-submit w-full bg-primary hover:bg-primary-dark text-white dark:text-black font-bold py-3.5 px-4 rounded-xl shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? 'Verifying...' : 'Start Interview'}
               </button>

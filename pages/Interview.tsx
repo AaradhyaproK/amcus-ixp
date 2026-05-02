@@ -353,45 +353,41 @@ const CandidateInfoForm: React.FC<{
   };
 
   return (
-      <div className="w-11/12 md:max-w-2xl lg:max-w-3xl bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
-        <div className="text-center mb-6">
-          <div className="inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-full mb-3 border border-blue-100 dark:border-blue-800">
-            Applying for: {jobTitle || 'AI Interview'}
+      <div className="candidate-form-shell w-11/12 md:max-w-2xl lg:max-w-3xl bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+        <div className="candidate-form-header text-center mb-6">
+          <div className="candidate-form-kicker inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-full mb-3 border border-blue-100 dark:border-blue-800">
+            {jobTitle || 'AI Interview'}
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Candidate Information</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Confirm your details to begin the AI interview.</p>
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Candidate details</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">Confirm the required information to continue.</p>
         </div>
         
         {userProfile && (
-          <div className="mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/50 shadow-sm relative overflow-hidden">
-             
-             {/* Decorative Background Elements */}
-             <div className="absolute -right-4 -top-4 w-24 h-24 bg-blue-500/10 dark:bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
-             
+          <div className="candidate-profile-card mb-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl border border-blue-100 dark:border-blue-800/50 shadow-sm relative overflow-hidden">
              <div className="flex items-center gap-3 mb-4">
-               <div className="bg-blue-600 dark:bg-blue-500 text-white w-10 h-10 rounded-xl shadow-md flex items-center justify-center font-black text-lg">
+               <div className="candidate-profile-avatar bg-blue-600 dark:bg-blue-500 text-white w-10 h-10 rounded-xl shadow-md flex items-center justify-center font-black text-lg">
                  {name.charAt(0).toUpperCase()}
                </div>
                <div>
-                 <p className="text-sm text-blue-900 dark:text-blue-200 font-bold mb-0">Profile Auto-Loaded</p>
-                 <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">The AI will use these details to tailor your interview</p>
+                 <p className="text-sm text-blue-900 dark:text-blue-200 font-bold mb-0">Profile loaded</p>
+                 <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">These details will guide the interview.</p>
                </div>
              </div>
 
              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-               <div className="bg-white/60 dark:bg-black/20 p-2.5 rounded-lg border border-blue-100/50 dark:border-white/5">
+               <div className="candidate-profile-meta bg-white/60 dark:bg-black/20 p-2.5 rounded-lg border border-blue-100/50 dark:border-white/5">
                  <p className="text-[10px] uppercase font-bold text-blue-500/80 dark:text-blue-400 mb-1">Stated Experience</p>
                  <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
                    {userProfile.experience ? `${userProfile.experience} Years` : 'Fresher / 0 Years'}
                  </p>
                </div>
                
-               <div className="bg-white/60 dark:bg-black/20 p-2.5 rounded-lg border border-blue-100/50 dark:border-white/5">
+               <div className="candidate-profile-meta bg-white/60 dark:bg-black/20 p-2.5 rounded-lg border border-blue-100/50 dark:border-white/5">
                  <p className="text-[10px] uppercase font-bold text-blue-500/80 dark:text-blue-400 mb-1">Top Skills</p>
                  <div className="flex flex-wrap gap-1">
                    {userProfile.skills && userProfile.skills.length > 0 ? (
                      userProfile.skills.slice(0, 3).map((skill: string, i: number) => (
-                       <span key={i} className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800/40 text-[10px] rounded font-medium text-blue-700 dark:text-blue-300 whitespace-nowrap">
+                       <span key={i} className="candidate-skill-chip px-1.5 py-0.5 bg-blue-100 dark:bg-blue-800/40 text-[10px] rounded font-medium text-blue-700 dark:text-blue-300 whitespace-nowrap">
                          {skill}
                        </span>
                      ))
@@ -407,9 +403,9 @@ const CandidateInfoForm: React.FC<{
           </div>
         )}
 
-        {errorMsg && <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">{errorMsg}</div>}
+        {errorMsg && <div className="candidate-form-alert mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">{errorMsg}</div>}
         
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="candidate-form-body space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Full Name <span className="text-red-500">*</span></label>
@@ -425,8 +421,8 @@ const CandidateInfoForm: React.FC<{
             <input type="tel" required placeholder="Contact Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
           </div>
 
-          <div className="bg-gray-50 dark:bg-gray-900/30 p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-3">Pre-Interview Details</h3>
+          <div className="candidate-form-section bg-gray-50 dark:bg-gray-900/30 p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-3">Pre-interview details</h3>
             
             {/* Resume Verification */}
             <div>
@@ -439,11 +435,11 @@ const CandidateInfoForm: React.FC<{
             
             {/* Experience Type */}
             <div className="grid grid-cols-2 md:grid-cols-2 gap-2 mt-2">
-                <label className={`p-2 rounded-lg text-sm font-bold border transition-colors text-center cursor-pointer ${experienceType === 'fresher' ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}>
+                <label className={`candidate-form-choice p-2 rounded-lg text-sm font-bold border transition-colors text-center cursor-pointer ${experienceType === 'fresher' ? 'is-active bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}>
                     <input type="radio" name="experienceType" value="fresher" className="sr-only" checked={experienceType === 'fresher'} onChange={() => setExperienceType('fresher')} />
                     Fresher
                 </label>
-                <label className={`p-2 rounded-lg text-sm font-bold border transition-colors text-center cursor-pointer ${experienceType === 'experienced' ? 'bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}>
+                <label className={`candidate-form-choice p-2 rounded-lg text-sm font-bold border transition-colors text-center cursor-pointer ${experienceType === 'experienced' ? 'is-active bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}>
                     <input type="radio" name="experienceType" value="experienced" className="sr-only" checked={experienceType === 'experienced'} onChange={() => setExperienceType('experienced')} />
                     Experienced
                 </label>
@@ -540,7 +536,7 @@ const CandidateInfoForm: React.FC<{
             )}
             
             {experienceType === 'experienced' && (
-              <div className="space-y-4 border-l-2 border-blue-500/50 pl-4 mt-4">
+              <div className="candidate-form-subsection space-y-4 border-l-2 border-blue-500/50 pl-4 mt-4">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    <div>
                       <label className="text-xs font-bold text-gray-500 block mb-1">Total Experience <span className="text-red-500">*</span></label>
@@ -623,11 +619,11 @@ const CandidateInfoForm: React.FC<{
                    </div>
                 </div>
                 
-                <div className="flex flex-col sm:flex-row justify-between sm:items-center bg-white dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-600 mt-4 gap-2">
+                <div className="candidate-salary-proof flex flex-col sm:flex-row justify-between sm:items-center bg-white dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-600 mt-4 gap-2">
                    <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Do you have salary slips/bank statements to support your current salary?</span>
                    <div className="flex gap-2">
-                     <button type="button" onClick={() => setHasSalaryProof('yes')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${hasSalaryProof === 'yes' ? 'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400'}`}>Yes</button>
-                     <button type="button" onClick={() => setHasSalaryProof('no')} className={`flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${hasSalaryProof === 'no' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400'}`}>No</button>
+                     <button type="button" onClick={() => setHasSalaryProof('yes')} className={`candidate-chip flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${hasSalaryProof === 'yes' ? 'is-active bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400'}`}>Yes</button>
+                     <button type="button" onClick={() => setHasSalaryProof('no')} className={`candidate-chip flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${hasSalaryProof === 'no' ? 'is-active bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400'}`}>No</button>
                    </div>
                 </div>
               </>
@@ -636,11 +632,11 @@ const CandidateInfoForm: React.FC<{
           
           {/* Hide Resume Upload entirely if the user is signed in (we use their Profile Box instead) */}
           {!userProfile && (
-            <div className="bg-gray-50 dark:bg-gray-900/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+            <div className="candidate-resume-section bg-gray-50 dark:bg-gray-900/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
               <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Resume Data</label>
               <label
                 htmlFor="resume-upload-input"
-                className={`w-full font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 border cursor-pointer ${isUploadingResume ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-600 border-yellow-200' : uploadedResumeUrl ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800/60'} ${isUploadingResume ? 'opacity-70 cursor-not-allowed' : ''}`}
+                className={`candidate-upload-trigger w-full font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 border cursor-pointer ${isUploadingResume ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-600 border-yellow-200' : uploadedResumeUrl ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800/60'} ${isUploadingResume ? 'opacity-70 cursor-not-allowed' : ''}`}
               >
                 <i className={isUploadingResume ? "fas fa-spinner fa-spin" : uploadedResumeUrl ? "fas fa-check-circle" : "fas fa-cloud-upload-alt"}></i>
                 <span>{isUploadingResume ? 'Uploading to Cloudinary...' : uploadedResumeUrl ? 'Resume Uploaded Successfully' : resumeFile ? resumeFile.name : 'Browser/Upload Resume PDF'}</span>
@@ -683,7 +679,7 @@ const CandidateInfoForm: React.FC<{
           {/* The label is now inside the LanguageSelector component */}
           <LanguageSelector selectedLanguage={language} onLanguageChange={setLanguage} className="pt-2" />
 
-          <button type="submit" className="w-full bg-blue-600 text-white p-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5 mt-4">
+          <button type="submit" className="candidate-form-submit w-full bg-blue-600 text-white p-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5 mt-4">
             Proceed to Interview
           </button>
         </form>
@@ -717,23 +713,23 @@ const VirtualAvatarInstructions: React.FC<{
   
   if (state.language === 'hi') {
     scriptLines = [
-      `${interview.title} की भूमिका के लिए आपके AI साक्षात्कार में आपका स्वागत है।`,
-      `कुल मिलाकर ${state.questions.length} प्रश्न होंगे।`,
-      `ये प्रश्न आपके बायोडाटा और नौकरी के विवरण पर आधारित हैं।`,
-      `प्रत्येक प्रश्न का उत्तर देने के लिए आपके पास 2 मिनट होंगे।`,
-      `कृपया सुनिश्चित करें कि आपका कैमरा चालू है और आप एक शांत वातावरण में हैं।`,
-      `यह एक प्रॉक्टर्ड टेस्ट है, इसलिए टैब स्विच करने पर नज़र रखी जाएगी।`,
-      `शुभकामनाएँ! जब आप तैयार हों तब आप साक्षात्कार शुरू कर सकते हैं।`
+      `${interview.title} ?? ?????? ?? ??? ???? AI ??????????? ??? ???? ?????? ???`,
+      `??? ?????? ${state.questions.length} ?????? ??????`,
+      `?? ?????? ???? ???????? ?? ????? ?? ????? ?? ?????? ????`,
+      `???????? ?????? ?? ????? ???? ?? ??? ???? ??? 2 ???? ??????`,
+      `????? ????????? ???? ?? ???? ????? ???? ?? ?? ?? ?? ???? ??????? ??? ????`,
+      `?? ?? ?????????? ????? ??, ????? ??? ????? ???? ?? ???? ??? ??????`,
+      `??????????! ?? ?? ????? ??? ?? ?? ??????????? ???? ?? ???? ????`
     ];
   } else if (state.language === 'mr') {
     scriptLines = [
-      `${interview.title} च्या भूमिकेसाठी तुमच्या AI मुलाखतीत तुमचे स्वागत आहे.`,
-      `एकूण ${state.questions.length} प्रश्न असतील.`,
-      `हे प्रश्न तुमच्या रेझ्युमे आणि जॉब डिस्क्रिप्शनवर आधारित आहेत.`,
-      `प्रत्येक प्रश्नाचे उत्तर देण्यासाठी तुमच्याकडे २ मिनिटे असतील.`,
-      `कृपया तुमचा कॅमेरा चालू असल्याची आणि तुम्ही शांत वातावरणात असल्याची खात्री करा.`,
-      `ही एक प्रॉक्टर्ड चाचणी आहे, त्यामुळे टॅब स्विचिंगचा मागोवा घेतला जाईल.`,
-      `शुभेच्छा! तुम्ही तयार असाल तेव्हा मुलाखत सुरू करू शकता.`
+      `${interview.title} ???? ?????????? ??????? AI ???????? ????? ?????? ???.`,
+      `???? ${state.questions.length} ?????? ?????.`,
+      `?? ?????? ??????? ???????? ??? ??? ?????????????? ?????? ????.`,
+      `???????? ????????? ????? ?????????? ?????????? ? ?????? ?????.`,
+      `????? ????? ?????? ???? ???????? ??? ?????? ???? ????????? ???????? ?????? ???.`,
+      `?? ?? ?????????? ????? ???, ???????? ??? ?????????? ?????? ????? ????.`,
+      `????????! ?????? ???? ???? ?????? ?????? ???? ??? ????.`
     ];
   } else {
     scriptLines = [
@@ -908,6 +904,527 @@ const VirtualAvatarInstructions: React.FC<{
                Start Interview <i className="fas fa-arrow-right"></i>
              </button>
            </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const InterviewReadinessOnboarding: React.FC<{
+  interview: Interview;
+  state: InterviewState;
+  onStart: () => void;
+}> = ({ interview, state, onStart }) => {
+  type NetworkState = {
+    online: boolean;
+    downlink: number | null;
+    effectiveType: string | null;
+    rtt: number | null;
+    latency: number | null;
+    quality: 'checking' | 'strong' | 'fair' | 'weak' | 'offline';
+    message: string;
+  };
+
+  const micPrompt = 'My microphone is clear and I am ready to begin this AI interview.';
+  const previewVideoRef = useRef<HTMLVideoElement>(null);
+  const previewStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const frameRef = useRef<number | null>(null);
+  const speechTimeoutRef = useRef<number | null>(null);
+  const micStageArmedRef = useRef(false);
+  const [activeStage, setActiveStage] = useState(0);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [permissionError, setPermissionError] = useState<string | null>(null);
+  const [cameraReady, setCameraReady] = useState(false);
+  const [micReady, setMicReady] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const [voiceDetected, setVoiceDetected] = useState(false);
+  const [networkState, setNetworkState] = useState<NetworkState>({
+    online: navigator.onLine,
+    downlink: null,
+    effectiveType: null,
+    rtt: null,
+    latency: null,
+    quality: navigator.onLine ? 'checking' : 'offline',
+    message: navigator.onLine ? 'Checking your connection...' : 'You are offline.',
+  });
+
+  const stages = [
+    {
+      title: 'Check your camera',
+      speech: [
+        'First, let us check your camera.',
+        'Keep your face inside the frame, sit straight, and look at the camera.',
+      ],
+    },
+    {
+      title: 'Check your microphone',
+      speech: [
+        'Now let us check your microphone.',
+        'Please read the line on screen so I can confirm your microphone is working.',
+      ],
+    },
+    {
+      title: 'Check your internet',
+      speech: [
+        'Now I am checking your internet connection.',
+        'If the connection is weak you can still continue.',
+      ],
+    },
+    {
+      title: 'Before you start',
+      speech: [
+        `Your AI interview for ${interview.title} is ready.`,
+        'Answer clearly, stay in fullscreen, and speak one answer at a time.',
+      ],
+    },
+  ] as const;
+
+  const summaryPoints = [
+    `Role: ${interview.title}`,
+    `${state.questions.length} question${state.questions.length === 1 ? '' : 's'} will be asked.`,
+    'Each answer gets 2 minutes.',
+    'Stay focused and speak clearly.',
+  ];
+
+  const stopPreview = () => {
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+
+    if (speechTimeoutRef.current !== null) {
+      window.clearTimeout(speechTimeoutRef.current);
+      speechTimeoutRef.current = null;
+    }
+
+    speak.stop();
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close().catch(() => undefined);
+      audioContextRef.current = null;
+    }
+
+    analyserRef.current = null;
+
+    if (previewStreamRef.current) {
+      previewStreamRef.current.getTracks().forEach(track => track.stop());
+      previewStreamRef.current = null;
+    }
+  };
+
+  const measureNetwork = async () => {
+    const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    const downlink = typeof connection?.downlink === 'number' ? connection.downlink : null;
+    const effectiveType = typeof connection?.effectiveType === 'string' ? connection.effectiveType : null;
+    const rtt = typeof connection?.rtt === 'number' ? connection.rtt : null;
+
+    if (!navigator.onLine) {
+      setNetworkState({
+        online: false,
+        downlink,
+        effectiveType,
+        rtt,
+        latency: null,
+        quality: 'offline',
+        message: 'You are offline.',
+      });
+      return;
+    }
+
+    setNetworkState(prev => ({
+      ...prev,
+      online: true,
+      downlink,
+      effectiveType,
+      rtt,
+      quality: 'checking',
+      message: 'Checking your connection...',
+    }));
+
+    let latency: number | null = null;
+
+    try {
+      const startedAt = performance.now();
+      await fetch(`/metadata.json?t=${Date.now()}`, { cache: 'no-store' });
+      latency = Math.round(performance.now() - startedAt);
+    } catch (error) {
+      latency = null;
+    }
+
+    let quality: NetworkState['quality'] = 'strong';
+    let message = 'Connection looks good.';
+
+    if (
+      effectiveType === 'slow-2g' ||
+      effectiveType === '2g' ||
+      (downlink !== null && downlink < 1) ||
+      (latency !== null && latency > 1400)
+    ) {
+      quality = 'weak';
+      message = 'Connection is weak, but you can continue.';
+    } else if (
+      effectiveType === '3g' ||
+      (downlink !== null && downlink < 4) ||
+      (latency !== null && latency > 700)
+    ) {
+      quality = 'fair';
+      message = 'Connection is usable.';
+    }
+
+    setNetworkState({
+      online: true,
+      downlink,
+      effectiveType,
+      rtt,
+      latency,
+      quality,
+      message,
+    });
+  };
+
+  const playStageAudio = () => {
+    if (speechTimeoutRef.current !== null) {
+      window.clearTimeout(speechTimeoutRef.current);
+    }
+
+    speak.stop();
+    setIsSpeaking(true);
+
+    const langMap: Record<string, string> = { en: 'en', hi: 'hi-IN', mr: 'mr-IN' };
+    const ttsLang = langMap[state.language] || 'en';
+    const stageText = stages[activeStage].speech.join(' ');
+
+    speechTimeoutRef.current = window.setTimeout(() => {
+      speak(stageText, {
+        lang: ttsLang,
+        onEnd: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    }, 800);
+  };
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const setupPreview = async () => {
+      setPermissionError(null);
+      setCameraReady(false);
+      setMicReady(false);
+
+      if (!navigator.mediaDevices?.getUserMedia) {
+        setPermissionError('This browser does not support camera and microphone access.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: 'user',
+            width: { ideal: 960 },
+            height: { ideal: 540 },
+          },
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+          },
+        });
+
+        if (isCancelled) {
+          stream.getTracks().forEach(track => track.stop());
+          return;
+        }
+
+        previewStreamRef.current = stream;
+        setCameraReady(stream.getVideoTracks().length > 0);
+        setMicReady(stream.getAudioTracks().length > 0);
+
+        if (previewVideoRef.current) {
+          previewVideoRef.current.srcObject = stream;
+          await previewVideoRef.current.play().catch(() => undefined);
+        }
+
+        const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextCtor && stream.getAudioTracks().length > 0) {
+          const audioContext = new AudioContextCtor();
+          const analyser = audioContext.createAnalyser();
+          analyser.fftSize = 256;
+          const source = audioContext.createMediaStreamSource(stream);
+          source.connect(analyser);
+
+          audioContextRef.current = audioContext;
+          analyserRef.current = analyser;
+
+          const data = new Uint8Array(analyser.frequencyBinCount);
+
+          const animateLevel = () => {
+            if (!analyserRef.current) return;
+
+            analyserRef.current.getByteTimeDomainData(data);
+            let sum = 0;
+
+            for (let i = 0; i < data.length; i++) {
+              const normalized = (data[i] - 128) / 128;
+              sum += normalized * normalized;
+            }
+
+            const rms = Math.sqrt(sum / data.length);
+            const level = Math.min(1, rms * 4.5);
+            setMicLevel(level);
+
+            if (micStageArmedRef.current && level > 0.12) {
+              setVoiceDetected(true);
+            }
+
+            frameRef.current = requestAnimationFrame(animateLevel);
+          };
+
+          animateLevel();
+        }
+      } catch (error) {
+        console.error('Onboarding media setup error:', error);
+        if (!isCancelled) {
+          setPermissionError('Camera and microphone access is required before the interview can begin.');
+        }
+      }
+    };
+
+    setupPreview();
+    measureNetwork();
+
+    const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
+    const handleConnectivityChange = () => {
+      measureNetwork();
+    };
+
+    window.addEventListener('online', handleConnectivityChange);
+    window.addEventListener('offline', handleConnectivityChange);
+    if (connection?.addEventListener) {
+      connection.addEventListener('change', handleConnectivityChange);
+    }
+
+    return () => {
+      isCancelled = true;
+      window.removeEventListener('online', handleConnectivityChange);
+      window.removeEventListener('offline', handleConnectivityChange);
+      if (connection?.removeEventListener) {
+        connection.removeEventListener('change', handleConnectivityChange);
+      }
+      stopPreview();
+    };
+  }, []);
+
+  useEffect(() => {
+    playStageAudio();
+
+    return () => {
+      if (speechTimeoutRef.current !== null) {
+        window.clearTimeout(speechTimeoutRef.current);
+        speechTimeoutRef.current = null;
+      }
+      speak.stop();
+      setIsSpeaking(false);
+    };
+  }, [activeStage, state.language, interview.title, state.questions.length]);
+
+  useEffect(() => {
+    if (activeStage === 1) {
+      setVoiceDetected(false);
+      micStageArmedRef.current = false;
+      const timer = window.setTimeout(() => {
+        micStageArmedRef.current = true;
+      }, 300);
+
+      return () => {
+        window.clearTimeout(timer);
+        micStageArmedRef.current = false;
+      };
+    }
+
+    if (activeStage === 2) {
+      measureNetwork();
+    }
+
+    micStageArmedRef.current = false;
+  }, [activeStage]);
+
+  const canContinue = [
+    cameraReady,
+    micReady && voiceDetected,
+    networkState.online && networkState.quality !== 'checking',
+    cameraReady && micReady && networkState.online,
+  ][activeStage];
+
+  const waveformBars = Array.from({ length: 14 }, (_, index) => {
+    const bias = 0.5 + ((index % 4) * 0.12);
+    const height = Math.max(16, Math.min(96, (micLevel * 96 * bias) + 12));
+    return `${height}%`;
+  });
+
+  const nextStage = () => setActiveStage(prev => Math.min(prev + 1, stages.length - 1));
+  const previousStage = () => setActiveStage(prev => Math.max(prev - 1, 0));
+
+  const handleStart = () => {
+    stopPreview();
+    onStart();
+  };
+
+  return (
+    <div className="readiness-shell">
+      <div className="readiness-frame">
+        <div className="readiness-topbar">
+          <div>
+            <div className="readiness-label">Role: {interview.title}</div>
+            <h2 className="readiness-heading">{stages[activeStage].title}</h2>
+          </div>
+          <div className="readiness-topbar-right">
+            <button type="button" className="readiness-audio-btn" onClick={playStageAudio}>
+              <i className={`fas ${isSpeaking ? 'fa-volume-up' : 'fa-rotate-right'}`}></i>
+              {isSpeaking ? 'Reading' : 'Replay'}
+            </button>
+            <div className="readiness-step-text">Step {activeStage + 1} / {stages.length}</div>
+          </div>
+        </div>
+
+        <div className="readiness-progress">
+          {stages.map((stage, index) => (
+            <span
+              key={stage.title}
+              className={`readiness-dot ${index === activeStage ? 'is-active' : ''} ${index < activeStage ? 'is-complete' : ''}`}
+            ></span>
+          ))}
+        </div>
+
+        {activeStage === 0 && (
+          <div className="readiness-stage readiness-camera-stage">
+            <div className="readiness-camera-panel">
+              <div className="readiness-camera-frame">
+                <video ref={previewVideoRef} autoPlay muted playsInline className="readiness-camera-video" />
+                <div className="readiness-camera-mask">
+                  <div className="readiness-camera-mask-box"></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="readiness-content-panel">
+              <p className="readiness-text">Keep the camera view simple and clear before the interview begins.</p>
+
+              <div className="readiness-note-list">
+                <div className="readiness-note-item">Face inside the frame</div>
+                <div className="readiness-note-item">Sit straight</div>
+                <div className="readiness-note-item">Look toward the camera</div>
+              </div>
+
+              <div className={`readiness-status ${cameraReady ? 'is-success' : 'is-danger'}`}>
+                {cameraReady ? 'Camera is ready.' : permissionError || 'Waiting for camera access.'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeStage === 1 && (
+          <div className="readiness-stage">
+            <div className="readiness-content-panel readiness-content-panel-wide">
+              <p className="readiness-text">Read this line once. The meter should move while you speak.</p>
+
+              <div className="readiness-phrase-card">{micPrompt}</div>
+
+              <div className="readiness-waveform">
+                {waveformBars.map((height, index) => (
+                  <span key={index} style={{ height }} className={voiceDetected ? 'is-live' : ''}></span>
+                ))}
+              </div>
+
+              <div className="readiness-meter">
+                <div className="readiness-meter-track">
+                  <div
+                    className={`readiness-meter-fill ${voiceDetected ? 'is-live' : ''}`}
+                    style={{ width: `${Math.max(8, micLevel * 100)}%` }}
+                  ></div>
+                </div>
+                <div className="readiness-meter-text">
+                  <span>{voiceDetected ? 'Microphone detected' : 'Waiting for speech'}</span>
+                  <strong>{Math.round(micLevel * 100)}%</strong>
+                </div>
+              </div>
+
+              <div className={`readiness-status ${voiceDetected ? 'is-success' : 'is-neutral'}`}>
+                {voiceDetected ? 'Microphone is working.' : 'Speak for a moment to continue.'}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeStage === 2 && (
+          <div className="readiness-stage">
+            <div className="readiness-content-panel readiness-content-panel-wide">
+              <p className="readiness-text">We are checking the current connection quality.</p>
+
+              <div className="readiness-network-grid">
+                <div className="readiness-network-item">
+                  <span>Status</span>
+                  <strong>{networkState.online ? networkState.quality.toUpperCase() : 'OFFLINE'}</strong>
+                </div>
+                <div className="readiness-network-item">
+                  <span>Downlink</span>
+                  <strong>{networkState.downlink !== null ? `${networkState.downlink} Mbps` : 'Unavailable'}</strong>
+                </div>
+                <div className="readiness-network-item">
+                  <span>Latency</span>
+                  <strong>{networkState.latency !== null ? `${networkState.latency} ms` : 'Unavailable'}</strong>
+                </div>
+                <div className="readiness-network-item">
+                  <span>Type</span>
+                  <strong>{networkState.effectiveType || 'Unknown'}</strong>
+                </div>
+              </div>
+
+              <div className={`readiness-status ${networkState.quality === 'weak' ? 'is-warning' : networkState.quality === 'offline' ? 'is-danger' : 'is-success'}`}>
+                {networkState.message}
+              </div>
+
+              <button type="button" className="readiness-secondary-btn" onClick={measureNetwork}>
+                Recheck connection
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeStage === 3 && (
+          <div className="readiness-stage">
+            <div className="readiness-content-panel readiness-content-panel-wide">
+              <p className="readiness-text">Everything is ready. Here is the interview format.</p>
+
+              <div className="readiness-summary-list">
+                {summaryPoints.map(point => (
+                  <div key={point} className="readiness-summary-item">{point}</div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="readiness-actions">
+          <div className="readiness-actions-left">
+            {activeStage > 0 && (
+              <button type="button" className="readiness-secondary-btn" onClick={previousStage}>
+                Back
+              </button>
+            )}
+          </div>
+          <div className="readiness-actions-right">
+            {activeStage < stages.length - 1 ? (
+              <button type="button" className="readiness-primary-btn" disabled={!canContinue} onClick={nextStage}>
+                Continue
+              </button>
+            ) : (
+              <button type="button" className="readiness-primary-btn" disabled={!canContinue} onClick={handleStart}>
+                Start interview
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -1126,7 +1643,7 @@ const CandidateInterviewFlow: React.FC = () => {
 
   // --- RENDER ---
   const Container = ({ children }: { children: React.ReactNode }) => (
-    <div className="fixed inset-0 z-[9999] overflow-y-auto bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 flex flex-col items-center justify-start py-12 px-4 transition-colors duration-500">
+    <div className="interview-flow-shell fixed inset-0 z-[9999] overflow-y-auto bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 flex flex-col items-center justify-start py-12 px-4 transition-colors duration-500">
       {children}
     </div>
   );
@@ -1135,8 +1652,8 @@ const CandidateInterviewFlow: React.FC = () => {
     return (
       <Container>
         {errorMsg ? 
-          <div className="text-red-500 bg-red-100 dark:bg-red-900/20 p-4 rounded-lg">{errorMsg}</div> : 
-          <div className="relative w-20 h-20">
+          <div className="interview-state-card interview-state-error text-red-500 bg-red-100 dark:bg-red-900/20 p-4 rounded-lg">{errorMsg}</div> : 
+          <div className="interview-state-loader relative w-20 h-20">
             <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
             <div className="absolute inset-3 border-t-4 border-purple-500 rounded-full animate-spin reverse"></div>
           </div>
@@ -1148,7 +1665,7 @@ const CandidateInterviewFlow: React.FC = () => {
   if (step === 'validating') {
     return (
       <Container>
-        <div className="relative w-20 h-20">
+        <div className="interview-state-loader relative w-20 h-20">
           <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
           <div className="absolute inset-3 border-t-4 border-purple-500 rounded-full animate-spin reverse"></div>
         </div>
@@ -1176,7 +1693,7 @@ const CandidateInterviewFlow: React.FC = () => {
     return (
       <Container>
         <div className="flex items-center justify-center min-h-[70vh] w-full px-4">
-          <VirtualAvatarInstructions
+          <InterviewReadinessOnboarding
             interview={interview}
             state={interviewState}
             onStart={() => setStep('interview')}
@@ -1189,14 +1706,14 @@ const CandidateInterviewFlow: React.FC = () => {
   if (step === 'setup' || step === 'processing') {
     return (
       <Container>
-        <div className="flex flex-col items-center max-w-md text-center">
-          <div className="relative w-24 h-24 mb-6">
+        <div className="interview-state-card flex flex-col items-center max-w-md text-center">
+          <div className="interview-state-loader relative w-24 h-24 mb-6">
             <div className="absolute inset-0 border-4 border-gray-200 dark:border-gray-700 rounded-full"></div>
             <div className="absolute inset-0 border-4 border-t-blue-500 border-r-transparent border-b-transparent border-l-transparent rounded-full animate-spin"></div>
             <i className="fas fa-robot absolute inset-0 flex items-center justify-center text-3xl text-gray-400 dark:text-gray-500"></i>
           </div>
-          <h3 className="text-xl font-bold text-gray-800 dark:text-white animate-pulse">{loadingMsg}</h3>
-          <p className="mt-4 text-gray-500 dark:text-gray-400 italic text-sm">"The first computer mouse was made of wood."</p>
+          <h3 className="text-xl font-bold text-gray-800 dark:text-white">{loadingMsg}</h3>
+          <p className="mt-4 text-gray-500 dark:text-gray-400 text-sm">Please wait while the interview is prepared.</p>
         </div>
       </Container>
     );
@@ -1595,12 +2112,11 @@ const ActiveInterviewSession: React.FC<{
   const renderFullscreenOverlay = () => {
     if (!isFullscreen && !isTerminated) {
       return createPortal(
-        <div className="fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4 sm:p-6 text-white text-center">
-          <div className="max-w-md w-full p-6 sm:p-8 bg-[#111] rounded-2xl border border-red-500/30 shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-red-500 to-yellow-500"></div>
-            <i className="fas fa-exclamation-triangle text-5xl text-yellow-500 mb-4 animate-pulse"></i>
+        <div className="interview-room-overlay fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4 sm:p-6 text-white text-center">
+          <div className="interview-room-overlay-card max-w-md w-full p-6 sm:p-8 bg-[#111] rounded-2xl border border-red-500/30 shadow-2xl relative overflow-hidden max-h-[90vh] overflow-y-auto">
+            <i className="fas fa-exclamation-triangle text-5xl text-yellow-500 mb-4"></i>
             <h2 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Fullscreen Required</h2>
-            <p className="text-gray-300 mb-6 font-medium text-xs sm:text-sm leading-relaxed">
+            <p className="interview-room-overlay-copy text-gray-300 mb-6 font-medium text-xs sm:text-sm leading-relaxed">
               {cameraError || fullscreenError || (
                 hasEnteredFullscreenRef.current
                   ? `You have exited fullscreen mode. You have ${3 - fullscreenEscapes} escape(s) remaining before automatic termination.`
@@ -1630,7 +2146,7 @@ const ActiveInterviewSession: React.FC<{
                   setFullscreenError("Fullscreen could not be enabled. Please allow fullscreen and try again.");
                 }
               }}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2"
+              className="interview-room-primary-button w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-lg hover:shadow-blue-500/20 active:scale-95 flex items-center justify-center gap-2"
             >
               <i className="fas fa-terminal text-lg"></i>
               {hasEnteredFullscreenRef.current ? "Return to Fullscreen" : "Enter Fullscreen & Start"}
@@ -1646,33 +2162,33 @@ const ActiveInterviewSession: React.FC<{
   // --- SPLIT-PANEL DASHBOARD LAYOUT ---
   return (
     <div
-      className="fixed inset-0 z-[9999] bg-gray-100 dark:bg-slate-950 text-gray-900 dark:text-white flex flex-col overflow-hidden select-none"
+      className="interview-room-shell fixed inset-0 z-[9999] bg-gray-100 dark:bg-slate-950 text-gray-900 dark:text-white flex flex-col overflow-hidden select-none"
       style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none', userSelect: 'none' }}
     >
       {renderFullscreenOverlay()}
 
       {cameraError && (
-        <div className="px-2 md:px-3 pt-2 md:pt-3">
-          <div className="w-full px-3 md:px-5 py-2.5 md:py-3 bg-red-50 dark:bg-red-900/30 rounded-lg md:rounded-xl border border-red-200 dark:border-red-700/50 shadow-sm text-red-700 dark:text-red-300 text-xs md:text-sm font-medium">
+        <div className="interview-room-banner-wrap px-2 md:px-3 pt-2 md:pt-3">
+          <div className="interview-room-banner w-full px-3 md:px-5 py-2.5 md:py-3 bg-red-50 dark:bg-red-900/30 rounded-lg md:rounded-xl border border-red-200 dark:border-red-700/50 shadow-sm text-red-700 dark:text-red-300 text-xs md:text-sm font-medium">
             {cameraError}
           </div>
         </div>
       )}
 
       {/* Main content: camera (left) + question (right) */}
-      <div className="flex-1 flex flex-col md:flex-row gap-2 md:gap-3 p-2 md:p-3 overflow-hidden min-h-0">
+      <div className="interview-room-grid flex-1 flex flex-col md:flex-row gap-2 md:gap-3 p-2 md:p-3 overflow-hidden min-h-0">
 
         {/* Left panel: camera feed */}
-        <div className="w-full md:w-5/12 flex flex-col gap-1.5 md:gap-3 shrink-0 md:shrink md:min-h-0">
+        <div className="interview-room-camera-column w-full md:w-5/12 flex flex-col gap-1.5 md:gap-3 shrink-0 md:shrink md:min-h-0">
           {/* Camera Card */}
-          <div className="relative min-h-[140px] h-[30vh] md:h-auto md:flex-1 md:min-h-[240px] bg-gray-900 rounded-xl md:rounded-2xl overflow-hidden border border-gray-700/50 shadow-xl">
-            <video ref={videoRef} autoPlay muted playsInline className="w-full h-full object-cover transform scale-x-[-1]" />
+          <div className="interview-room-camera-card relative min-h-[140px] h-[30vh] md:h-auto md:flex-1 md:min-h-[240px] bg-gray-900 rounded-xl md:rounded-2xl overflow-hidden border border-gray-700/50 shadow-xl">
+            <video ref={videoRef} autoPlay muted playsInline className="interview-room-camera-video w-full h-full object-cover transform scale-x-[-1]" />
 
             {/* Countdown Overlay (scoped to camera) */}
             {sessionReady && countdown > 0 && (
-              <div className="absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-xl md:rounded-2xl">
+              <div className="interview-room-countdown absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-xl md:rounded-2xl">
                 <p className="text-white/80 text-sm md:text-lg font-light mb-1 md:mb-2 tracking-widest uppercase">Get Ready</p>
-                <span className="text-5xl md:text-8xl font-black text-white" style={{ animationDuration: '1s', animation: 'pulse 1s ease-in-out infinite' }}>{countdown}</span>
+                <span className="text-5xl md:text-8xl font-black text-white">{countdown}</span>
               </div>
             )}
 
@@ -1684,41 +2200,41 @@ const ActiveInterviewSession: React.FC<{
           </div>
 
           {/* Status Bar Below Camera */}
-          <div className="flex items-center justify-between px-2 md:px-4 py-1.5 md:py-2.5 bg-white dark:bg-gray-800/60 rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-700/50 shadow-sm">
+          <div className="interview-room-meta flex items-center justify-between px-2 md:px-4 py-1.5 md:py-2.5 bg-white dark:bg-gray-800/60 rounded-lg md:rounded-xl border border-gray-200 dark:border-gray-700/50 shadow-sm">
             <div className="flex items-center gap-2 md:gap-3">
               {/* REC Indicator */}
               {isRecording ? (
-                <div className="flex items-center gap-1 md:gap-1.5 bg-red-500/15 text-red-600 dark:text-red-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-bold uppercase tracking-wider animate-pulse">
+                <div className="interview-room-badge is-recording flex items-center gap-1 md:gap-1.5 bg-red-500/15 text-red-600 dark:text-red-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-bold uppercase tracking-wider">
                   <div className="w-1.5 md:w-2 h-1.5 md:h-2 bg-red-500 rounded-full"></div>
                   REC
                 </div>
               ) : !cameraReady ? (
-                <div className="flex items-center gap-1 md:gap-1.5 bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-bold uppercase tracking-wider">
-                  <div className="w-1.5 md:w-2 h-1.5 md:h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                <div className="interview-room-badge is-pending flex items-center gap-1 md:gap-1.5 bg-yellow-500/15 text-yellow-600 dark:text-yellow-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-bold uppercase tracking-wider">
+                  <div className="w-1.5 md:w-2 h-1.5 md:h-2 bg-yellow-500 rounded-full"></div>
                   INITIALIZING
                 </div>
               ) : (
-                <div className="flex items-center gap-1 md:gap-1.5 bg-gray-100 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-medium">
+                <div className="interview-room-badge flex items-center gap-1 md:gap-1.5 bg-gray-100 dark:bg-gray-700/50 text-gray-500 dark:text-gray-400 px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-medium">
                   <div className="w-1.5 md:w-2 h-1.5 md:h-2 bg-gray-400 rounded-full"></div>
                   STANDBY
                 </div>
               )}
             </div>
-            <div className={`px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-mono font-semibold border ${isFullscreen ? 'bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20'}`}>
+            <div className={`interview-room-badge ${isFullscreen ? 'is-good bg-green-500/10 text-green-600 dark:text-green-400 border-green-500/20' : 'is-pending bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/20'} px-2 md:px-2.5 py-0.5 md:py-1 rounded-md md:rounded-lg text-[10px] md:text-[11px] font-mono font-semibold border`}>
               {isFullscreen ? 'FULLSCREEN ON' : 'FULLSCREEN OFF'}
             </div>
           </div>
         </div>
 
         {/* Right panel: question + controls */}
-        <div className="w-full md:w-7/12 flex flex-col gap-2 md:gap-3 min-h-0 flex-1">
+        <div className="interview-room-question-column w-full md:w-7/12 flex flex-col gap-2 md:gap-3 min-h-0 flex-1">
           {/* Question Card */}
-          <div className="flex-1 flex flex-col bg-white dark:bg-gray-800/60 rounded-xl md:rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-xl overflow-hidden min-h-0">
+          <div className="interview-room-question-card flex-1 flex flex-col bg-white dark:bg-gray-800/60 rounded-xl md:rounded-2xl border border-gray-200 dark:border-gray-700/50 shadow-xl overflow-hidden min-h-0">
 
             {/* Question Header: Counter + Timer */}
-            <div className="flex items-center justify-between px-3 md:px-6 py-2.5 md:py-4 border-b border-gray-100 dark:border-gray-700/50 shrink-0">
+            <div className="interview-room-question-header flex items-center justify-between px-3 md:px-6 py-2.5 md:py-4 border-b border-gray-100 dark:border-gray-700/50 shrink-0">
               <div className="flex items-center gap-2 md:gap-3">
-                <div className="w-6 h-6 md:w-8 md:h-8 rounded-md md:rounded-lg bg-blue-500/10 dark:bg-blue-500/15 flex items-center justify-center">
+                <div className="interview-room-question-icon w-6 h-6 md:w-8 md:h-8 rounded-md md:rounded-lg bg-blue-500/10 dark:bg-blue-500/15 flex items-center justify-center">
                   <i className="fas fa-list-ol text-blue-500 text-xs md:text-sm"></i>
                 </div>
                 <div>
@@ -1729,20 +2245,20 @@ const ActiveInterviewSession: React.FC<{
                 </div>
               </div>
               {/* Timer */}
-              <div className={`flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl font-mono font-bold text-xs md:text-sm transition-colors ${timeLeft < 30
+              <div className={`interview-room-timer flex items-center gap-1.5 md:gap-2 px-2.5 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl font-mono font-bold text-xs md:text-sm transition-colors ${timeLeft < 30
                 ? 'bg-red-50 text-red-600 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800'
                 : 'bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-700/50 dark:text-white dark:border-gray-600'
                 } border shadow-sm`}>
-                <div className={`w-1.5 md:w-2 h-1.5 md:h-2 rounded-full ${isRecording ? 'bg-red-500 animate-pulse' : 'bg-gray-400 dark:bg-gray-500'}`}></div>
+                <div className={`w-1.5 md:w-2 h-1.5 md:h-2 rounded-full ${isRecording ? 'bg-red-500' : 'bg-gray-400 dark:bg-gray-500'}`}></div>
                 <i className="fas fa-clock text-[10px] md:text-xs opacity-60"></i>
                 {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, '0')}
               </div>
             </div>
 
             {/* Question Body */}
-            <div className="flex-1 overflow-y-auto px-3 md:px-6 py-3 md:py-6 flex items-start">
+            <div className="interview-room-question-body flex-1 overflow-y-auto px-3 md:px-6 py-3 md:py-6 flex items-start">
               <div className="w-full">
-                <p className="text-[10px] md:text-xs text-blue-500 dark:text-blue-400 font-semibold uppercase tracking-widest mb-2 md:mb-3">
+                <p className="interview-room-question-label text-[10px] md:text-xs text-blue-500 dark:text-blue-400 font-semibold uppercase tracking-widest mb-2 md:mb-3">
                   <i className="fas fa-microphone-alt mr-1"></i> Answer this question
                 </p>
                 <h2 className="text-base md:text-2xl font-semibold leading-relaxed text-gray-800 dark:text-gray-100">
@@ -1752,26 +2268,26 @@ const ActiveInterviewSession: React.FC<{
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center justify-end gap-2 md:gap-3 px-3 md:px-6 py-2.5 md:py-4 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30 shrink-0">
+            <div className="interview-room-question-actions flex items-center justify-end gap-2 md:gap-3 px-3 md:px-6 py-2.5 md:py-4 border-t border-gray-100 dark:border-gray-700/50 bg-gray-50/50 dark:bg-gray-800/30 shrink-0">
 
               {/* Next / Stop Button */}
               {isRecording ? (
                 <button
                   onClick={stopRecording}
-                  className="flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/20 transform transition hover:scale-[1.02] active:scale-95"
+                  className="interview-room-primary-button flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl font-bold text-xs md:text-sm bg-gradient-to-r from-blue-600 to-indigo-600 text-white hover:from-blue-700 hover:to-indigo-700 shadow-lg shadow-blue-500/20 transform transition hover:scale-[1.02] active:scale-95"
                 >
                   Next
                   <i className="fas fa-arrow-right"></i>
                 </button>
               ) : processingVideo || isStopping ? (
-                <div className="flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 animate-pulse">
+                <div className="interview-room-state-chip flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs md:text-sm font-medium text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600">
                   <i className="fas fa-circle-notch fa-spin"></i>
-                  Processing...
+                  Loading next...
                 </div>
               ) : (
-                <div className="flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs md:text-sm font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-600">
+                <div className="interview-room-state-chip is-muted flex items-center gap-2 px-4 md:px-6 py-2 md:py-2.5 rounded-lg md:rounded-xl text-xs md:text-sm font-medium text-gray-400 dark:text-gray-500 bg-gray-100 dark:bg-gray-700/30 border border-gray-200 dark:border-gray-600">
                   <i className="fas fa-hourglass-half"></i>
-                  Waiting...
+                  Ready
                 </div>
               )}
             </div>
@@ -1779,10 +2295,10 @@ const ActiveInterviewSession: React.FC<{
         </div>
       </div>
 
-      <div className="shrink-0 px-2 md:px-3 pb-2 md:pb-3">
+      <div className="interview-room-footer shrink-0 px-2 md:px-3 pb-2 md:pb-3">
         {/* Tab-switch warning banner (red, real-time) */}
         {tabWarning && (
-          <div className="w-full px-3 md:px-5 py-2 md:py-3 bg-red-50 dark:bg-red-900/30 rounded-lg md:rounded-xl border border-red-200 dark:border-red-700/50 shadow-sm flex items-center gap-2 md:gap-3 animate-pulse">
+          <div className="interview-room-warning w-full px-3 md:px-5 py-2 md:py-3 bg-red-50 dark:bg-red-900/30 rounded-lg md:rounded-xl border border-red-200 dark:border-red-700/50 shadow-sm flex items-center gap-2 md:gap-3">
             <div className="w-5 md:w-7 h-5 md:h-7 rounded-md md:rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
               <i className="fas fa-exclamation-triangle text-red-500 text-[10px] md:text-xs"></i>
             </div>
@@ -1791,7 +2307,7 @@ const ActiveInterviewSession: React.FC<{
               <p className="text-xs md:text-sm text-red-700 dark:text-red-300 font-semibold truncate">{tabWarning}</p>
             </div>
             <div className="hidden sm:flex items-center gap-1.5 px-2 py-1 rounded-full bg-red-500/10 text-red-600 dark:text-red-400 text-[10px] font-mono font-bold shrink-0">
-              <div className="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></div>
+              <div className="w-1.5 h-1.5 bg-red-500 rounded-full"></div>
               FLAGGED
             </div>
           </div>
@@ -1970,49 +2486,49 @@ const InterviewSubmission: React.FC<{
 
   return (
       <>
-      <div className="min-h-screen bg-gray-50 dark:bg-transparent flex flex-col items-center justify-center p-4">
-        <div className="relative w-24 h-24 mb-8">
+      <div className="interview-completion-shell min-h-screen bg-gray-50 dark:bg-transparent flex flex-col items-center justify-center p-4">
+        <div className="interview-completion-spinner relative w-24 h-24 mb-8">
           <div className="absolute inset-0 border-4 border-green-100 dark:border-gray-800 rounded-full"></div>
           <div className="absolute inset-0 border-4 border-t-green-500 border-r-green-400 border-b-transparent border-l-transparent rounded-full animate-spin"></div>
           <i className="fas fa-check absolute inset-0 flex items-center justify-center text-3xl text-green-500"></i>
         </div>
-        <h2 className="text-3xl font-bold text-gray-800 dark:text-white mb-2">
+        <h2 className="interview-completion-title text-3xl font-bold text-gray-800 dark:text-white mb-2">
           {terminated ? 'Interview Terminated' : 'Interview Complete'}
         </h2>
-        <p className={`mb-12 animate-pulse ${terminated ? 'text-red-500 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
+        <p className={`interview-completion-status mb-12 ${terminated ? 'text-red-500 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>
           {terminated ? 'Session revoked due to security violations.' : status}
         </p>
 
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-2xl max-w-lg text-center border border-gray-100 dark:border-gray-700 shadow-xl">
-          <p className="text-xs font-bold text-blue-500 uppercase mb-3 tracking-widest">Tech Fact</p>
+        <div className="interview-completion-fact bg-white dark:bg-gray-800 p-6 rounded-2xl max-w-lg text-center border border-gray-100 dark:border-gray-700 shadow-xl">
+          <p className="text-xs font-bold text-blue-500 uppercase mb-3 tracking-widest">While we process</p>
           <p className="text-gray-700 dark:text-gray-300 italic text-lg transition-all duration-500">"{facts[factIndex]}"</p>
         </div>
       </div>
 
       {showCompletionPopup && createPortal(
-        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-[10000] p-4" onClick={() => navigate('/')}>
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg text-center p-8 m-4 animate-fade-in-up" onClick={e => e.stopPropagation()}>
-            <div className="w-20 h-20 mx-auto bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mb-4 border-4 border-green-200 dark:border-green-800">
+        <div className="interview-completion-overlay fixed inset-0 bg-black/70 flex items-center justify-center z-[10000] p-4" onClick={() => navigate('/')}>
+          <div className="interview-completion-modal bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-lg text-center p-8 m-4 animate-fade-in-up" onClick={e => e.stopPropagation()}>
+            <div className="interview-completion-icon w-20 h-20 mx-auto bg-green-100 dark:bg-green-900/50 rounded-full flex items-center justify-center mb-4 border-4 border-green-200 dark:border-green-800">
                 <i className="fas fa-award text-4xl text-green-500"></i>
             </div>
             <h3 className="font-bold text-2xl text-gray-900 dark:text-white mb-2">Thank You!</h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">Your interview has been successfully submitted. The recruiter will be in touch with the next steps.</p>
             
-            <div className="bg-blue-50 dark:bg-blue-900/30 p-6 rounded-xl border border-blue-100 dark:border-blue-800">
-              <h4 className="font-semibold text-lg text-blue-800 dark:text-blue-300 mb-2">What happens next?</h4>
-              <p className="text-sm text-blue-700 dark:text-blue-400 mb-4">Your response has been saved successfully. The recruiter can now review your submission and follow up with the next steps.</p>
+            <div className="interview-completion-next bg-blue-50 dark:bg-blue-900/30 p-6 rounded-xl border border-blue-100 dark:border-blue-800">
+              <h4 className="font-semibold text-lg text-blue-800 dark:text-blue-300 mb-2">Next step</h4>
+              <p className="text-sm text-blue-700 dark:text-blue-400 mb-4">The recruiter can now review your submission.</p>
               <div className="flex flex-col gap-3">
-                <button onClick={() => navigate('/submit-review')} className="w-full bg-gradient-to-r from-pink-500 to-orange-400 text-white font-bold py-3 px-5 rounded-lg hover:from-pink-600 hover:to-orange-500 transition-colors shadow-lg shadow-pink-500/20 transform hover:-translate-y-0.5 flex justify-center items-center gap-2">
-                  <i className="fa-solid fa-star text-yellow-300 drop-shadow-md"></i> Give Review
+                <button onClick={() => navigate('/submit-review')} className="interview-completion-primary w-full bg-gradient-to-r from-pink-500 to-orange-400 text-white font-bold py-3 px-5 rounded-lg hover:from-pink-600 hover:to-orange-500 transition-colors shadow-lg shadow-pink-500/20 transform hover:-translate-y-0.5 flex justify-center items-center gap-2">
+                  <i className="fa-solid fa-star text-yellow-300"></i> Give Review
                 </button>
               </div>
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <a href={`#${reportUrl}`} target="_blank" rel="noopener noreferrer" className="flex-1 text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+              <a href={`#${reportUrl}`} target="_blank" rel="noopener noreferrer" className="interview-completion-secondary flex-1 text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                 View Submission Report
               </a>
-              <button onClick={() => navigate('/')} className="flex-1 text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+              <button onClick={() => navigate('/')} className="interview-completion-secondary flex-1 text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                 Go to Homepage
               </button>
             </div>
