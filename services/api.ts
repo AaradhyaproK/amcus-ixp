@@ -120,7 +120,8 @@ export const generateFeedback = async (
   mimeType: string,
   questions: string[],
   transcripts: string[],
-  resumeTextContent?: string
+  resumeTextContent?: string,
+  strictness: 'Low' | 'Medium' | 'Hard' = 'Medium'
 ) => {
   const jd  = truncate(jobDescription, JD_MAX_CHARS);
   const exp = truncate(candidateExp, 150);
@@ -131,7 +132,14 @@ export const generateFeedback = async (
     return `Q${i + 1}: ${q}\nA${i + 1}: ${ans}`;
   }).join('\n\n---\n\n');
 
-  const sys = `You are an experienced hiring manager evaluating a candidate after an interview. Your goal is to provide a realistic, accurate, and human-like hiring assessment. Be fair and practical, focusing on job readiness over perfection. If the candidate shows reasonable understanding and decent communication, avoid very low scores. If answers are mostly correct but imperfect, consider them positively. This is an interview, not an academic test. Adhere strictly to the output format provided.`;
+  let strictnessInstructions = "You are an experienced hiring manager evaluating a candidate after an interview. Your goal is to provide a realistic, accurate, and human-like hiring assessment. Be fair and practical, focusing on job readiness over perfection. If the candidate shows reasonable understanding and decent communication, avoid very low scores. If answers are mostly correct but imperfect, consider them positively. This is an interview, not an academic test.";
+  if (strictness === 'Low') {
+    strictnessInstructions = "You are an encouraging hiring manager. Ignore very small points in communication and minor technical mistakes. Focus on the candidate's core understanding. Do not give low scores for small errors. Be extremely forgiving.";
+  } else if (strictness === 'Hard') {
+    strictnessInstructions = "You are an extremely strict hiring manager. Scrutinize every detail of the answers. Provide strict feedback, heavily penalizing any technical gaps, hesitation, or communication errors. Demand perfection.";
+  }
+
+  const sys = `${strictnessInstructions} Adhere strictly to the output format provided.`;
 
   const feedbackPrompt =
 `## Candidate Evaluation

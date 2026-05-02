@@ -992,7 +992,7 @@ const CandidateInterviewFlow: React.FC = () => {
         const combinedData = { ...interviewData, isMock: jobData.isMock || false };
 
         setInterview(combinedData as Interview);
-        setInterviewState(prev => ({ ...prev, jobTitle: combinedData.title, jobDescription: combinedData.description, isMock: combinedData.isMock }));
+        setInterviewState(prev => ({ ...prev, jobTitle: combinedData.title, jobDescription: combinedData.description, isMock: combinedData.isMock, strictness: combinedData.strictness || 'Medium' }));
         setStep('collect-info');
 
       } catch (err: any) { 
@@ -1915,7 +1915,8 @@ const InterviewSubmission: React.FC<{
           finalState.candidateResumeMimeType!,
           finalState.questions,
           transcriptTexts,
-          resumeTextContent
+          resumeTextContent,
+          finalState.strictness || 'Medium'
         );
 
         // The AI prompt for generateFeedback should be structured to consistently return scores

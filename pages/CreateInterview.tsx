@@ -39,6 +39,7 @@ const CreateInterview: React.FC = () => {
     deadline: '',
     numQuestions: 5,
     difficulty: 'Medium',
+    strictness: 'Medium',
   });
 
   useEffect(() => {
@@ -521,18 +522,36 @@ const CreateInterview: React.FC = () => {
             </div>
           </div>
           
-          <div className="space-y-2 form-field">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Difficulty Level</label>
-            <select 
-              name="difficulty" 
-              value={formData.difficulty} 
-              onChange={handleFormChange} 
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
-            >
-              <option value="Easy">Easy</option>
-              <option value="Medium">Medium</option>
-              <option value="Hard">Hard</option>
-            </select>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2 form-field">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Difficulty Level</label>
+              <select 
+                name="difficulty" 
+                value={formData.difficulty} 
+                onChange={handleFormChange} 
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+              >
+                <option value="Easy">Easy</option>
+                <option value="Medium">Medium</option>
+                <option value="Hard">Hard</option>
+              </select>
+            </div>
+            
+            <div className="space-y-2 form-field">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                Report Check Strictness
+              </label>
+              <select 
+                name="strictness" 
+                value={formData.strictness} 
+                onChange={handleFormChange} 
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+              >
+                <option value="Low">Low (Ignore minor issues)</option>
+                <option value="Medium">Medium (Balanced)</option>
+                <option value="Hard">Hard (Strict feedback)</option>
+              </select>
+            </div>
           </div>
 
           <div className="space-y-4 form-field p-6 bg-blue-50/50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-2xl">

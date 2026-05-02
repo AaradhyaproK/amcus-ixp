@@ -5,6 +5,7 @@ export interface Interview {
     department?: string;
     duration: number;
     difficulty: 'Easy' | 'Medium' | 'Hard';
+    strictness?: 'Low' | 'Medium' | 'Hard';
     questions: Question[];
     candidateId?: string;
     candidateEmails?: string[];
@@ -143,5 +144,6 @@ export interface InterviewState {
   pendingResponseCount?: number;
   isMock?: boolean;
   terminated?: boolean;
+  strictness?: 'Low' | 'Medium' | 'Hard';
 }
   
