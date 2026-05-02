@@ -92,6 +92,7 @@ const InterviewReport: React.FC = () => {
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const [profileTextData, setProfileTextData] = useState<string>('');
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [isCompareMode, setIsCompareMode] = useState(false);
 
   useEffect(() => {
     const fetchSubmission = async () => {
@@ -501,10 +502,11 @@ const InterviewReport: React.FC = () => {
             </div>
         </div>
 
-        <div id="report-content" className="max-w-7xl mx-auto space-y-6">
+        <div id="report-content" className={`mx-auto transition-all duration-300 ${isCompareMode ? 'max-w-full flex flex-col xl:flex-row gap-6' : 'max-w-7xl space-y-6'}`}>
             
-            {/* Header & Candidate Info */}
-            <div className="bg-white dark:bg-white/5 rounded-2xl p-6 border border-gray-200 dark:border-white/10 shadow-sm flex flex-col md:flex-row gap-6 justify-between items-center">
+            <div className={`space-y-6 flex-1 w-full ${isCompareMode ? 'xl:w-1/2' : ''}`}>
+                {/* Header & Candidate Info */}
+                <div className="bg-white dark:bg-white/5 rounded-2xl p-6 border border-gray-200 dark:border-white/10 shadow-sm flex flex-col md:flex-row gap-6 justify-between items-center">
                 <div>
                     <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
                         {submission.candidateInfo?.name || 'Candidate'}'s Report
@@ -528,17 +530,22 @@ const InterviewReport: React.FC = () => {
                         )}
                     </div>
                 </div>
-                <div className="flex gap-4 items-center">
+                <div className="flex flex-wrap gap-3 items-center justify-end">
+                    {submission.candidateResumeURL && !submission.candidateResumeURL.startsWith('data:text/plain') && (
+                        <button onClick={() => setIsCompareMode(!isCompareMode)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isCompareMode ? 'bg-primary/10 text-primary border-primary/30' : 'bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}>
+                            <FileText size={16} /> {isCompareMode ? 'Exit Compare Mode' : 'Compare Resume'}
+                        </button>
+                    )}
                     <button onClick={() => setIsResumeModalOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-white/20 transition-colors">
-                        <User size={16} /> View Profile/Resume Data
+                        <User size={16} /> View Profile Data
                     </button>
                 </div>
 
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className={`grid grid-cols-1 gap-6 ${isCompareMode ? '' : 'lg:grid-cols-3'}`}>
                 {/* Main Content */}
-                <div className="lg:col-span-2 space-y-6">
+                <div className={`space-y-6 ${isCompareMode ? '' : 'lg:col-span-2'}`}>
                     {/* AI Summary Card */}
                     <div className="bg-white dark:bg-white/5 rounded-2xl p-6 md:p-8 border border-gray-200 dark:border-white/10 shadow-sm">
                         <h2 className="text-xl font-bold mb-6 flex items-center gap-3"><Brain size={24} className="text-primary"/> Hiring Manager Evaluation</h2>
@@ -563,7 +570,7 @@ const InterviewReport: React.FC = () => {
                 </div>
 
                 {/* Sidebar */}
-                <div className="lg:col-span-1 space-y-6">
+                <div className={`space-y-6 ${isCompareMode ? '' : 'lg:col-span-1'}`}>
                     {/* Scores Card */}
                     <div className="bg-white dark:bg-white/5 rounded-2xl p-6 border border-gray-200 dark:border-white/10 shadow-sm">
                         <h2 className="text-lg font-bold mb-4 flex items-center gap-2"><CheckCircle size={20} className="text-primary"/> Performance Scores</h2>
@@ -721,6 +728,30 @@ const InterviewReport: React.FC = () => {
                     )}
                 </div>
             </div>
+            
+            </div> {/* End of Left Panel Wrapper */}
+
+            {/* Sticky Compare Mode Resume Panel (Right Side) */}
+            {isCompareMode && submission.candidateResumeURL && !submission.candidateResumeURL.startsWith('data:text/plain') && (
+                <div className="w-full xl:w-1/2 xl:sticky xl:top-24 h-[80vh] xl:h-[calc(100vh-8rem)] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm bg-white dark:bg-[#111] overflow-hidden flex flex-col">
+                    <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5">
+                        <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
+                            <FileText size={16} className="text-primary"/> Original Resume PDF
+                        </h3>
+                        <a href={submission.candidateResumeURL} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1.5 text-primary hover:underline font-medium px-3 py-1 bg-primary/10 rounded-lg ml-auto mr-3">
+                            <i className="fas fa-external-link-alt"></i> Open Full
+                        </a>
+                        <button onClick={() => setIsCompareMode(false)} className="w-6 h-6 flex items-center justify-center rounded-full bg-gray-200 dark:bg-white/10 text-gray-500 hover:text-gray-800 dark:hover:text-white transition-colors">&times;</button>
+                    </div>
+                    <div className="flex-1 w-full bg-gray-100 dark:bg-[#0a0a0a] relative">
+                         <div className="absolute inset-0 flex flex-col items-center justify-center z-0 text-gray-400 dark:text-gray-500">
+                             <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mb-3"></div>
+                             <span className="text-sm">Loading document...</span>
+                         </div>
+                         <iframe src={submission.candidateResumeURL} className="absolute inset-0 w-full h-full border-none z-10" title="Resume Compare" />
+                    </div>
+                </div>
+            )}
         </div>
 
         {/* Modals content follows */}

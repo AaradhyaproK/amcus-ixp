@@ -147,88 +147,138 @@ let cancelGeneration = false;
 // ─── Core speak() function ───────────────────────────────────────────────────
 
 /**
- * Speak the given text using strictly Native OS Web Speech engine.
- * Highly optimized for any tier of PC.
+ * Speak the given text.
+ * Uses high-quality OpenAI TTS for Indian languages (Hindi, Marathi) for human-like reading.
+ * Uses native Web Speech API for English for instant response.
  */
+let currentAudio: HTMLAudioElement | null = null;
+
 async function speak(text: string, options?: SpeakOptions): Promise<void> {
-  // Always stop any ongoing speech first
   speak.stop();
   cancelGeneration = false;
 
   const lang = detectLang(text, options?.lang);
-  let voiceLang = 'en-US';
-
-  // Apply Regional mappings
+  
+  // High-Quality AI TTS for Indian Languages (Hindi, Marathi)
   if (lang === 'hi-IN' || lang === 'mr-IN' || lang === 'hi' || lang === 'mr') {
-    voiceLang = 'hi-IN'; // Both Hindi and Marathi spoken excellently natively by 'hi-IN' engines
+    return new Promise<void>(async (resolve) => {
+      try {
+        const OPENAI_API_KEY = import.meta.env.VITE_OPENAI_API_KEY;
+        if (!OPENAI_API_KEY) {
+          console.warn("OpenAI API key missing, falling back to robotic native TTS.");
+          throw new Error("Missing API Key");
+        }
+
+        const response = await fetch("https://api.openai.com/v1/audio/speech", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ model: "tts-1", input: text, voice: "alloy" })
+        });
+
+        if (!response.ok) throw new Error("OpenAI TTS failed");
+        
+        if (cancelGeneration) {
+          resolve();
+          return;
+        }
+
+        const blob = await response.blob();
+        const url = URL.createObjectURL(blob);
+        const audio = new Audio(url);
+        currentAudio = audio;
+
+        audio.onended = () => {
+          options?.onEnd?.();
+          resolve();
+        };
+
+        audio.onerror = (e) => {
+          console.error("Audio playback error:", e);
+          options?.onError?.(e);
+          resolve();
+        };
+
+        audio.play().catch(e => {
+          console.error("Audio play failed:", e);
+          options?.onError?.(e);
+          resolve();
+        });
+      } catch (err) {
+        // Fallback to Native TTS if API fails or is missing
+        await playNativeTTS(text, 'hi-IN', options, resolve);
+      }
+    });
   }
 
+  // Native TTS for English
   return new Promise<void>(async (resolve) => {
-    if (!('speechSynthesis' in window)) {
-      console.warn('[TTS] Web Speech API not supported in this browser/PC');
+    await playNativeTTS(text, 'en-US', options, resolve);
+  });
+}
+
+// Helper to play native TTS (chunked for slow PCs)
+async function playNativeTTS(text: string, voiceLang: string, options: SpeakOptions | undefined, resolve: () => void) {
+  if (!('speechSynthesis' in window)) {
+    console.warn('[TTS] Web Speech API not supported in this browser/PC');
+    options?.onEnd?.();
+    resolve();
+    return;
+  }
+  
+  await ensureVoicesLoaded();
+  if (cancelGeneration) {
+     resolve();
+     return;
+  }
+  window.speechSynthesis.cancel();
+
+  const rawChunks = text.match(/[^.!?;]+[.!?;]?/g) || [text];
+  const sentences = rawChunks.map(s => s.trim()).filter(s => s.length > 0);
+  let currentIndex = 0;
+
+  const playNextChunk = () => {
+    if (cancelGeneration || currentIndex >= sentences.length) {
       options?.onEnd?.();
       resolve();
       return;
     }
-    
-    // Wait for native voices to load onto the slow PC
-    await ensureVoicesLoaded();
 
-    if (cancelGeneration) {
-       resolve();
-       return;
-    }
+    const utter = new SpeechSynthesisUtterance(sentences[currentIndex]);
+    utter.lang = voiceLang;
+    utter.rate = options?.rate ?? 1.0;
 
-    // Cancel any ghost leftovers in the OS buffer
-    window.speechSynthesis.cancel();
+    const voice = pickVoice(voiceLang);
+    if (voice) utter.voice = voice;
 
-    // Chunk text by sentences to provide faster pacing on slow machines
-    // For WebSpeech, giving it massive blocks of text can sometimes freeze older Chrome instances
-    const rawChunks = text.match(/[^.!?;]+[.!?;]?/g) || [text];
-    const sentences = rawChunks.map(s => s.trim()).filter(s => s.length > 0);
-
-    let currentIndex = 0;
-
-    const playNextChunk = () => {
-      if (cancelGeneration || currentIndex >= sentences.length) {
-        options?.onEnd?.();
-        resolve();
-        return;
-      }
-
-      const utter = new SpeechSynthesisUtterance(sentences[currentIndex]);
-      utter.lang = voiceLang;
-      utter.rate = options?.rate ?? 1.0;
-
-      const voice = pickVoice(voiceLang);
-      if (voice) {
-        utter.voice = voice;
-      }
-
-      utter.onend = () => {
-        currentIndex++;
-        playNextChunk();
-      };
-
-      utter.onerror = (e) => {
-        console.warn('[TTS] Native speech error on chunk:', e);
-        // Continue to next chunk if one errors out to prevent freeze
-        currentIndex++;
-        playNextChunk();
-      };
-
-      window.speechSynthesis.speak(utter);
+    utter.onend = () => {
+      currentIndex++;
+      playNextChunk();
     };
 
-    // Kick off speech chain
-    playNextChunk();
-  });
+    utter.onerror = (e) => {
+      console.warn('[TTS] Native speech error on chunk:', e);
+      currentIndex++;
+      playNextChunk();
+    };
+
+    window.speechSynthesis.speak(utter);
+  };
+
+  playNextChunk();
 }
 
 // ─── speak.stop() ────────────────────────────────────────────────────────────
 
 speak.stop = (): void => {
   cancelGeneration = true;
+  if (currentAudio) {
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio = null;
+  }
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     window.speechSynthesis.cancel();
   }
