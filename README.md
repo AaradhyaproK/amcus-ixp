@@ -25,7 +25,7 @@ Create `.env` file with Firebase config, Razorpay key, and Google GenAI API key.
 
 ## Contributors
 
-Aaradhya Pathak, Nimesh Kulkarni, Bhavesh Patil, Sanika Wadnekar
+Aaradhya Pathak, Nimesh Kulkarni & Bhavesh Patil
 
 ## License
 
