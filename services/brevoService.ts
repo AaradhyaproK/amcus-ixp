@@ -25,14 +25,15 @@ function deriveNameFromEmail(email: string): string {
 /**
  * Generates a plain and professional HTML email template for interview invitations.
  */
-function getEmailTemplate(candidateName: string, jobTitle: string, interviewLink: string, accessCode: string): string {
+function getEmailTemplate(candidateName: string, jobTitle: string, interviewLink: string, accessCode: string, isReminder: boolean = false): string {
+  const subjectPrefix = isReminder ? "Reminder: " : "";
   return `
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Interview Invitation</title>
+  <title>${subjectPrefix}Interview Invitation</title>
 </head>
 <body style="margin:0;padding:40px;background-color:#f4f6f9;font-family:Arial,sans-serif;color:#000000;font-size:16px;line-height:1.5;">
   <div style="max-width:650px;margin:0 auto;background-color:#daf2ef;box-shadow:0 8px 30px rgba(0,0,0,0.12);border-top:6px solid #0082c8;">
@@ -44,11 +45,11 @@ function getEmailTemplate(candidateName: string, jobTitle: string, interviewLink
 
     <!-- Email Body -->
     <div style="padding:40px;">
-      <p style="margin:0 0 30px;">Subject: Your Interview Confirmation</p>
+      <p style="margin:0 0 30px;">Subject: ${subjectPrefix}Your Interview Confirmation</p>
 
       <p style="margin:0 0 20px;">Dear ${candidateName},</p>
       
-      <p style="margin:0 0 20px;">We have found your resume suitable for the post ${jobTitle}.<br>If interested please attend the work interview. Please take this email as confirmation of the following details for your upcoming online interview.</p>
+      <p style="margin:0 0 20px;">${isReminder ? "This is a polite reminder that your interview response is still pending." : "We have found your resume suitable for the post " + jobTitle + ".<br>If interested please attend the work interview."} Please take this email as confirmation of the following details for your online interview.</p>
       
       <p style="margin:0 0 4px;"><strong>Interview Link:</strong> <a href="${interviewLink}" style="color:#0082c8;">${interviewLink}</a></p>
       <p style="margin:0 0 20px;"><strong>Interview Password:</strong> ${accessCode}</p>
@@ -139,7 +140,8 @@ export async function sendInterviewInvitations(
   candidateEmails: string[],
   jobTitle: string,
   interviewLink: string,
-  accessCode: string
+  accessCode: string,
+  isReminder: boolean = false
 ): Promise<SendEmailResult> {
   if (!candidateEmails.length) {
     return { success: false, totalEmails: 0, error: 'No candidate emails provided.' };
@@ -150,8 +152,8 @@ export async function sendInterviewInvitations(
 
   for (const email of candidateEmails) {
     const candidateName = deriveNameFromEmail(email);
-    const htmlContent = getEmailTemplate(candidateName, jobTitle, interviewLink, accessCode);
-    const subject = `Interview Invitation — ${jobTitle} | Dsource`;
+    const htmlContent = getEmailTemplate(candidateName, jobTitle, interviewLink, accessCode, isReminder);
+    const subject = `${isReminder ? 'Reminder: ' : ''}Interview Invitation — ${jobTitle} | Dsource`;
 
     const result = await sendSingleEmail(email, candidateName, subject, htmlContent);
 

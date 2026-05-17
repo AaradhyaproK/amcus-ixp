@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
 import { Interview } from '../types';
 import * as pdfjsLib from 'pdfjs-dist';
+import * as mammoth from 'mammoth';
 import { useMessageBox } from '../components/MessageBox';
 import { createPortal } from 'react-dom';
 import { sendInterviewInvitations } from '../services/brevoService';
@@ -28,6 +29,10 @@ const RecruiterInterviews: React.FC = () => {
   const [submissionsMap, setSubmissionsMap] = useState<Record<string, any[]>>({});
   const [parsingResumes, setParsingResumes] = useState(false);
   const [sendingEmails, setSendingEmails] = useState(false);
+  const [editingCandidateEmail, setEditingCandidateEmail] = useState<string | null>(null);
+  const [editedEmailValue, setEditedEmailValue] = useState('');
+  const [resendingEmail, setResendingEmail] = useState<string | null>(null);
+  const [remindingInterviewId, setRemindingInterviewId] = useState<string | null>(null);
   const messageBox = useMessageBox();
   const navigate = useNavigate();
   const actionButtonClass = 'inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 text-xs font-semibold hover:bg-white dark:hover:bg-gray-800 transition-colors';
@@ -114,6 +119,10 @@ const RecruiterInterviews: React.FC = () => {
             const textContent = await page.getTextContent();
             text += textContent.items.map((item: any) => item.str).join(' ');
           }
+        } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || file.name.endsWith('.docx')) {
+          const arrayBuffer = await file.arrayBuffer();
+          const result = await mammoth.extractRawText({ arrayBuffer });
+          text = result.value;
         } else if (file.type === 'text/plain') {
           text = await file.text();
         } else {
@@ -164,6 +173,103 @@ const RecruiterInterviews: React.FC = () => {
     messageBox.showInfo(`Processed ${filesProcessed} file(s). Found ${newCandidatesFound.length} new candidate(s). ${filesWithErrors > 0 ? `Failed to parse ${filesWithErrors} file(s).` : ''}`);
     setParsingResumes(false);
     e.target.value = ''; // Reset file input
+  };
+
+  const handleEditAndResend = async (oldEmail: string, newEmail: string) => {
+    if (!selectedInterview || !newEmail || oldEmail === newEmail) {
+        setEditingCandidateEmail(null);
+        return;
+    }
+    
+    setResendingEmail(oldEmail);
+    try {
+        const updatedEmails = (selectedInterview.candidateEmails || []).filter(e => e.toLowerCase() !== oldEmail.toLowerCase());
+        updatedEmails.push(newEmail.toLowerCase());
+
+        await updateDoc(doc(db, 'interviews', selectedInterview.id), { 
+            candidateEmails: updatedEmails
+        });
+        
+        setSelectedInterview({...selectedInterview, candidateEmails: updatedEmails});
+        
+        const result = await sendInterviewInvitations(
+            [newEmail],
+            selectedInterview.title,
+            selectedInterview.interviewLink || '',
+            selectedInterview.accessCode
+        );
+
+        if (result.success) {
+            messageBox.showSuccess(`Email updated and invitation resent to ${newEmail}!`);
+        } else {
+            messageBox.showError(`Failed to resend email: ${result.error}`);
+        }
+    } catch (error: any) {
+        console.error('Edit & Resend error:', error);
+        messageBox.showError('Failed to update and resend invitation.');
+    } finally {
+        setResendingEmail(null);
+        setEditingCandidateEmail(null);
+    }
+  };
+
+  const handleResend = async (email: string) => {
+    if (!selectedInterview) return;
+    setResendingEmail(email);
+    try {
+        const result = await sendInterviewInvitations(
+            [email],
+            selectedInterview.title,
+            selectedInterview.interviewLink || '',
+            selectedInterview.accessCode
+        );
+
+        if (result.success) {
+            messageBox.showSuccess(`Invitation resent to ${email}!`);
+        } else {
+            messageBox.showError(`Failed to resend email: ${result.error}`);
+        }
+    } catch (error: any) {
+        console.error('Resend error:', error);
+        messageBox.showError('Failed to resend invitation.');
+    } finally {
+        setResendingEmail(null);
+    }
+  };
+
+  const handleSendBulkReminders = async (interview: Interview) => {
+    const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
+    const submissions = submissionsMap[interview.id] || [];
+    const pendingEmails = explicitEmails.filter(email => {
+        return !submissions.some(sub => (sub.candidateInfo?.email || '').toLowerCase() === email);
+    });
+
+    if (pendingEmails.length === 0) {
+        messageBox.showInfo('No pending candidates found. Everyone invited has already submitted.');
+        return;
+    }
+
+    setRemindingInterviewId(interview.id);
+    try {
+        const result = await sendInterviewInvitations(
+            pendingEmails,
+            interview.title,
+            interview.interviewLink || '',
+            interview.accessCode,
+            true
+        );
+
+        if (result.success) {
+            messageBox.showSuccess(`Reminders sent successfully to ${result.totalEmails} candidate(s)!`);
+        } else {
+            messageBox.showError(`Failed to send some reminders: ${result.error}`);
+        }
+    } catch (error: any) {
+        console.error('Bulk remind error:', error);
+        messageBox.showError('Failed to send reminders.');
+    } finally {
+        setRemindingInterviewId(null);
+    }
   };
 
   const handleSendInvites = async () => {
@@ -258,6 +364,16 @@ const RecruiterInterviews: React.FC = () => {
                                     <i className="fas fa-user-plus text-green-500"></i>
                                     <span>Invite Candidates</span>
                                 </button>
+                                <button
+                                    type="button"
+                                    onClick={() => handleSendBulkReminders(interview)}
+                                    className={actionButtonClass}
+                                    title="Send Reminders"
+                                    disabled={remindingInterviewId === interview.id}
+                                >
+                                    {remindingInterviewId === interview.id ? <i className="fas fa-spinner fa-spin text-purple-500"></i> : <i className="fas fa-bell text-purple-500"></i>}
+                                    <span>Send Reminders</span>
+                                </button>
                                 <Link
                                     to={`/interview/${interview.id}`}
                                     target="_blank"
@@ -349,21 +465,48 @@ const RecruiterInterviews: React.FC = () => {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col text-gray-900 dark:text-white">
                 <h3 className="font-bold text-lg p-4 border-b border-gray-200 dark:border-gray-700">Invite Candidates</h3>
                 <div className="p-4 space-y-4 overflow-y-auto">
-                    <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg">
-                        <h4 className="font-semibold text-sm">Access Code</h4>
-                        <div className="flex items-center justify-between">
-                            <span className="font-mono text-lg tracking-widest">{selectedInterview.accessCode}</span>
-                            <button onClick={() => navigator.clipboard.writeText(selectedInterview.accessCode || '')} className="text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white" title="Copy Access Code">
-                                <i className="fas fa-copy"></i>
-                            </button>
+                    <div className="p-4 bg-gray-100 dark:bg-gray-700 rounded-lg space-y-3">
+                        <div>
+                            <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300 mb-1">Access Code</h4>
+                            <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-600">
+                                <span className="font-mono tracking-widest">{selectedInterview.accessCode}</span>
+                                <button onClick={() => {navigator.clipboard.writeText(selectedInterview.accessCode || ''); messageBox.showSuccess('Access code copied!');}} className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors" title="Copy Access Code">
+                                    <i className="fas fa-copy"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <h4 className="font-semibold text-sm text-gray-700 dark:text-gray-300 mb-1">Interview Link</h4>
+                            <div className="flex items-center justify-between bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-600">
+                                <span className="text-sm truncate mr-2 text-gray-600 dark:text-gray-400">
+                                    {selectedInterview.interviewLink || `${window.location.origin}/#/interview/${selectedInterview.id}`}
+                                </span>
+                                <button onClick={() => {
+                                    const link = selectedInterview.interviewLink || `${window.location.origin}/#/interview/${selectedInterview.id}`;
+                                    navigator.clipboard.writeText(link);
+                                    messageBox.showSuccess('Interview link copied!');
+                                }} className="text-gray-500 hover:text-gray-900 dark:hover:text-white transition-colors" title="Copy Interview Link">
+                                    <i className="fas fa-link"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div className="pt-2 text-right">
+                             <button onClick={() => {
+                                    const link = selectedInterview.interviewLink || `${window.location.origin}/#/interview/${selectedInterview.id}`;
+                                    const text = `You've been invited to an interview for ${selectedInterview.title}.\n\nInterview Link: ${link}\nAccess Code: ${selectedInterview.accessCode}`;
+                                    navigator.clipboard.writeText(text);
+                                    messageBox.showSuccess('Full invite details copied!');
+                             }} className="text-xs font-semibold text-primary hover:text-primary-dark">
+                                 <i className="fas fa-clipboard-list mr-1"></i> Copy Full Invite Details
+                             </button>
                         </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium mb-2">Upload Resume to Find Email</label>
                         <label className="flex items-center justify-center gap-2 px-4 py-3 bg-gray-50 dark:bg-gray-700 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors">
                             <i className={`fas fa-cloud-upload-alt ${parsingResumes ? 'fa-spin' : ''}`}></i>
-                            <span className="font-medium text-sm">{parsingResumes ? 'Parsing Resumes...' : 'Upload Resumes (PDF/TXT)'}</span>
-                            <input type="file" multiple accept=".pdf,.txt" className="hidden" onChange={handleResumeUpload} disabled={parsingResumes} />
+                            <span className="font-medium text-sm">{parsingResumes ? 'Parsing Resumes...' : 'Upload Resumes (PDF/DOCX/TXT)'}</span>
+                            <input type="file" multiple accept=".pdf,.txt,.docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" className="hidden" onChange={handleResumeUpload} disabled={parsingResumes} />
                         </label>
                     </div>
                     <div>
@@ -426,6 +569,69 @@ const RecruiterInterviews: React.FC = () => {
                             </div>
                         )}
                     </div>
+                    {selectedInterview.candidateEmails && selectedInterview.candidateEmails.length > 0 && (
+                        <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                            <h4 className="font-semibold mb-2 text-sm">Previously Invited Candidates:</h4>
+                            <div className="flex flex-col gap-2 max-h-[200px] overflow-y-auto pr-1">
+                                {selectedInterview.candidateEmails.map((email) => {
+                                    const isEditing = editingCandidateEmail === email;
+                                    const isResending = resendingEmail === email;
+                                    
+                                    return (
+                                        <div key={email} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 shadow-sm">
+                                            {isEditing ? (
+                                                <div className="flex-1 flex gap-2 mr-2">
+                                                    <input 
+                                                        type="email" 
+                                                        value={editedEmailValue} 
+                                                        onChange={(e) => setEditedEmailValue(e.target.value)} 
+                                                        className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-primary"
+                                                        autoFocus
+                                                    />
+                                                    <button 
+                                                        onClick={() => handleEditAndResend(email, editedEmailValue)}
+                                                        disabled={resendingEmail !== null}
+                                                        className="bg-green-500 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-green-600 disabled:opacity-50 flex items-center gap-1 shrink-0"
+                                                    >
+                                                        {isResending ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>} Save
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => setEditingCandidateEmail(null)}
+                                                        disabled={resendingEmail !== null}
+                                                        className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded text-xs font-semibold hover:bg-gray-300 dark:hover:bg-gray-500 shrink-0"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className="font-medium text-gray-900 dark:text-white truncate max-w-[200px]" title={email}>{email}</span>
+                                                    <div className="flex items-center gap-2">
+                                                        <button 
+                                                            onClick={() => { setEditingCandidateEmail(email); setEditedEmailValue(email); }}
+                                                            disabled={resendingEmail !== null}
+                                                            className="text-gray-500 hover:text-blue-500 transition-colors p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" 
+                                                            title="Edit Email & Resend"
+                                                        >
+                                                            <i className="fas fa-pencil-alt text-xs"></i>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleResend(email)}
+                                                            disabled={resendingEmail !== null}
+                                                            className="text-gray-500 hover:text-green-500 transition-colors p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1" 
+                                                            title="Resend Invitation"
+                                                        >
+                                                            {isResending ? <i className="fas fa-spinner fa-spin text-xs"></i> : <i className="fas fa-paper-plane text-xs"></i>}
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
                 <div className="flex justify-end gap-2 p-4 border-t border-gray-200 dark:border-gray-700">
                     <button onClick={() => setIsInviteModalOpen(false)} className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-4 py-2 rounded">Cancel</button>
