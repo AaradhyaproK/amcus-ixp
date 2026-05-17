@@ -265,12 +265,12 @@ const InterviewResponses: React.FC = () => {
           placeholder="Search by name or email..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="w-full md:flex-1 p-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-black/80 backdrop-blur-sm dark:text-white dark:placeholder-slate-500"
+          className="w-full md:flex-1 p-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-black/80 backdrop-blur-sm text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-slate-500"
         />
         <select
           value={sortOrder}
           onChange={(e) => setSortOrder(e.target.value as 'desc' | 'asc')}
-          className="w-full md:w-auto p-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-black/80 backdrop-blur-sm dark:text-white cursor-pointer"
+          className="w-full md:w-auto p-3 border border-gray-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent bg-white dark:bg-black/80 backdrop-blur-sm text-gray-900 dark:text-white cursor-pointer"
         >
           <option value="desc">Score: High to Low</option>
           <option value="asc">Score: Low to High</option>
@@ -302,14 +302,14 @@ const InterviewResponses: React.FC = () => {
 
       <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-100 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">
         <span className="text-sm font-bold mr-2 text-gray-700 dark:text-gray-300">Auto-select:</span>
-        <button onClick={() => handleAutoSelect('top10')} className="px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Top 10</button>
-        <button onClick={() => handleAutoSelect('top20')} className="px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Top 20</button>
+        <button onClick={() => handleAutoSelect('top10')} className="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Top 10</button>
+        <button onClick={() => handleAutoSelect('top20')} className="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Top 20</button>
         
         <div className="flex items-center gap-1 bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 p-0.5">
             <select 
                 value={scoreOperator} 
                 onChange={e => setScoreOperator(e.target.value as 'gte' | 'lte')}
-                className="bg-transparent text-xs font-medium border-none focus:ring-0 h-full py-1 pl-2 pr-1 appearance-none dark:bg-slate-700"
+                className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-medium border-none focus:ring-0 h-full py-1 pl-2 pr-1 appearance-none dark:bg-slate-700"
             >
                 <option value="gte">Score ≥</option>
                 <option value="lte">Score ≤</option>
@@ -318,7 +318,7 @@ const InterviewResponses: React.FC = () => {
                 type="number" 
                 value={customScore}
                 onChange={e => setCustomScore(Number(e.target.value))}
-                className="w-12 text-center bg-gray-50 dark:bg-slate-600 border-x border-gray-200 dark:border-slate-500 text-xs font-bold h-full py-1 focus:outline-none focus:ring-1 focus:ring-primary"
+                className="w-12 text-center bg-gray-50 dark:bg-slate-600 border-x border-gray-200 dark:border-slate-500 text-gray-900 dark:text-white text-xs font-bold h-full py-1 focus:outline-none focus:ring-1 focus:ring-primary"
                 min="0" max="10" step="0.5"
             />
             <button onClick={handleCustomScoreSelect} className="px-2 text-xs font-bold text-primary hover:bg-primary/10 rounded-sm h-full">
@@ -327,7 +327,7 @@ const InterviewResponses: React.FC = () => {
         </div>
 
         <div className="flex-grow"></div>
-        <button onClick={() => handleAutoSelect('all')} className="px-3 py-1 text-xs font-medium bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Select All</button>
+        <button onClick={() => handleAutoSelect('all')} className="px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-slate-700 rounded-md shadow-sm border border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-600">Select All</button>
         <button onClick={() => handleAutoSelect('none')} className="px-3 py-1 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-md shadow-sm border border-red-200 dark:border-red-600 hover:bg-red-200 dark:hover:bg-red-800/50">Clear</button>
       </div>
 

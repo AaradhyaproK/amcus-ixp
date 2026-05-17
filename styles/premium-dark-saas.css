@@ -1517,7 +1517,7 @@ html:not(.dark) .text-blue-400 {
 
 /* Plain premium dark interview flow override */
 
-:root,
+:root.force-dark,
 .dark {
   --card: #101012;
   --ring: #4b5563;
@@ -1556,15 +1556,10 @@ html:not(.dark) .text-blue-400 {
   --secondary-foreground-rgb: 245 245 245;
 }
 
-html,
+html.force-dark,
 html.dark {
   color-scheme: dark;
   background: var(--background);
-}
-
-body {
-  background: var(--background) !important;
-  color: var(--foreground) !important;
 }
 
 .card,
