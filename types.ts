@@ -124,6 +124,7 @@ export interface InterviewSubmission {
   videoURLs?: Array<string | null>;
   transcriptTexts?: Array<string | null>;
   candidateResumeURL?: string;
+  status?: 'Shortlist' | 'Reject' | 'Hold';
 }
 
 export interface InterviewState {

@@ -1,11 +1,13 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { collection, query, onSnapshot, orderBy, doc, getDoc } from 'firebase/firestore';
+import { collection, query, onSnapshot, orderBy, doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
 import { useAuth } from '../context/AuthContext';
+import { useMessageBox } from '../components/MessageBox';
 
 const InterviewResponses: React.FC = () => {
+  const messageBox = useMessageBox();
   const { interviewId } = useParams<{ interviewId: string }>();
   const [submissions, setSubmissions] = useState<InterviewSubmission[]>([]);
   const [loading, setLoading] = useState(true);
@@ -234,6 +236,28 @@ const InterviewResponses: React.FC = () => {
     }
   };
 
+  const handleStatusChange = async (submissionId: string, newStatus: string) => {
+    if (!interviewId) return;
+    try {
+      const submissionRef = doc(db, 'interviews', interviewId, 'attempts', submissionId);
+      await updateDoc(submissionRef, { status: newStatus });
+      messageBox.showSuccess(`Candidate status updated to ${newStatus}`);
+    } catch (err) {
+      console.error("Error updating status:", err);
+      messageBox.showError("Failed to update candidate status.");
+    }
+  };
+
+  const handleShareClientLink = async () => {
+    const link = `${window.location.origin}/#/client-view/${interviewId}`;
+    try {
+      await navigator.clipboard.writeText(link);
+      messageBox.showSuccess("Client sharing link copied to clipboard!");
+    } catch (err) {
+      messageBox.showError("Failed to copy link.");
+    }
+  };
+
   const parseFeedback = (feedback: unknown) => {
     if (typeof feedback !== 'string') return { resumeAnalysis: 'N/A', answerQuality: 'N/A', overallEvaluation: 'N/A' };
     const resumeMatch = feedback.match(/\*\*Resume Analysis:\*\*([\s\S]*?)(?=\*\*Answer Quality:\*\*|$)/);
@@ -296,6 +320,12 @@ const InterviewResponses: React.FC = () => {
             className="w-full md:w-auto px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg focus:ring-2 focus:ring-green-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <i className="fas fa-file-excel"></i> Export CSV {selectedSubmissions.length > 0 ? `(${selectedSubmissions.length})` : ''}
+          </button>
+          <button
+            onClick={handleShareClientLink}
+            className="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg focus:ring-2 focus:ring-purple-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
+          >
+            <i className="fas fa-share-alt"></i> Share Shortlisted Profiles
           </button>
         </div>
       </div>
@@ -371,9 +401,25 @@ const InterviewResponses: React.FC = () => {
                                     <i className="fas fa-calendar-alt"></i> Submitted: {submission.submittedAt?.toDate ? submission.submittedAt.toDate().toLocaleString('en-GB') : 'N/A'}
                                 </div>
                             </div>
-                            <div className="flex flex-col items-end">
-                              <div className="text-3xl font-black text-primary">{getScoreValue(submission.score).toFixed(1)}<span className="text-lg text-gray-400 font-medium">/{getScoreDenom(submission.score)}</span></div>
-                              <span className="text-sm font-semibold uppercase tracking-wider text-gray-500 mt-1">Overall Score</span>
+                            <div className="flex flex-col items-end gap-2">
+                              <div className="flex flex-col items-end">
+                                <div className="text-3xl font-black text-primary">{getScoreValue(submission.score).toFixed(1)}<span className="text-lg text-gray-400 font-medium">/{getScoreDenom(submission.score)}</span></div>
+                                <span className="text-sm font-semibold uppercase tracking-wider text-gray-500 mt-1">Overall Score</span>
+                              </div>
+                              <select 
+                                value={submission.status || 'Hold'} 
+                                onChange={(e) => handleStatusChange(submission.id, e.target.value)}
+                                className={`text-sm font-bold rounded-lg border focus:ring-2 focus:ring-primary py-1.5 pl-3 pr-8 cursor-pointer mt-1
+                                  ${(submission.status || 'Hold') === 'Shortlist' ? 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-400 dark:border-green-800/50' :
+                                    (submission.status || 'Hold') === 'Reject' ? 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-800/50' :
+                                    'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-800/50'
+                                  }
+                                `}
+                              >
+                                <option value="Hold">Hold</option>
+                                <option value="Shortlist">Shortlist</option>
+                                <option value="Reject">Reject</option>
+                              </select>
                             </div>
                         </div>
                         <div className="mt-5 pt-4 border-t border-gray-100 dark:border-white/5 flex justify-end">

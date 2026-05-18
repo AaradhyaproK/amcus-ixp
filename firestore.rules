@@ -94,7 +94,7 @@ service cloud.firestore {
       match /attempts/{attemptId} {
         allow create: if true;
         allow get: if true;
-        allow list: if isStaff() || ownsInterview(interviewId);
+        allow list: if isStaff() || ownsInterview(interviewId) || resource.data.status == 'Shortlist';
         allow update: if isAdmin() || ownsInterview(interviewId);
       }
     }
