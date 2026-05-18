@@ -957,44 +957,48 @@ const InterviewReport: React.FC = () => {
                         )}
                         
                         {/* Video & Q&A Panel (Right) */}
-                        <div className={`${showResumeInVideo ? 'w-1/2' : 'w-full'} flex flex-col bg-black overflow-y-auto custom-scrollbar`}>
-                            {/* Video Player */}
-                            <div className="w-full aspect-video bg-black shrink-0 relative border-b border-white/10">
-                                {submission.videoURLs?.[activeVideoIndex] ? (
-                                    <video
-                                        key={submission.videoURLs[activeVideoIndex]} // Force re-render on source change
-                                        controls
-                                        autoPlay
-                                        src={submission.videoURLs[activeVideoIndex]}
-                                        className="w-full h-full object-contain"
-                                    />
-                                ) : (
-                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
-                                        <Video size={48} className="mb-4 opacity-50" />
-                                        <p className="text-lg font-medium text-gray-400">No Recording Available</p>
-                                        <p className="text-sm mt-2">The candidate did not record a video for this question.</p>
-                                    </div>
-                                )}
+                        <div className={`${showResumeInVideo ? 'w-1/2' : 'w-full'} flex flex-col bg-black overflow-hidden`}>
+                            {/* Question (On Top) */}
+                            <div className="p-4 md:p-6 border-b border-white/10 shrink-0 bg-[#0f0f0f]">
+                                <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                    <Brain size={14} /> Question Asked
+                                </h4>
+                                <p className="text-lg font-semibold text-gray-200">
+                                    {submission.questions?.[activeVideoIndex] || 'Unknown Question'}
+                                </p>
                             </div>
-                            
-                            {/* Q&A Content */}
-                            <div className="flex-1 p-6 flex flex-col gap-6">
-                                <div>
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                        <Brain size={14} /> Question Asked
-                                    </h4>
-                                    <p className="text-lg font-semibold text-gray-200">
-                                        {submission.questions?.[activeVideoIndex] || 'Unknown Question'}
-                                    </p>
+
+                            {/* Content Area (Video + Transcript) */}
+                            <div className={`flex flex-1 overflow-hidden ${showResumeInVideo ? 'flex-col' : 'flex-col md:flex-row'}`}>
+                                {/* Video Player */}
+                                <div className={`relative flex items-center justify-center bg-black shrink-0 ${showResumeInVideo ? 'w-full aspect-video border-b border-white/10' : 'w-full md:w-[55%] border-b md:border-b-0 md:border-r border-white/10'}`}>
+                                    {submission.videoURLs?.[activeVideoIndex] ? (
+                                        <video
+                                            key={submission.videoURLs[activeVideoIndex]} // Force re-render on source change
+                                            controls
+                                            autoPlay
+                                            src={submission.videoURLs[activeVideoIndex]}
+                                            className="absolute inset-0 w-full h-full object-contain"
+                                        />
+                                    ) : (
+                                        <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500 p-4">
+                                            <Video size={48} className="mb-4 opacity-50" />
+                                            <p className="text-lg font-medium text-gray-400 text-center">No Recording Available</p>
+                                            <p className="text-sm mt-2 text-center">The candidate did not record a video for this question.</p>
+                                        </div>
+                                    )}
                                 </div>
                                 
-                                <div className="flex-1 bg-white/5 rounded-xl p-5 border border-white/10">
-                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                                        <FileText size={14} /> AI Transcript / Answer
-                                    </h4>
-                                    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
-                                        {submission.transcriptTexts?.[activeVideoIndex] || 'Transcript not available for this question.'}
-                                    </p>
+                                {/* AI Transcript */}
+                                <div className="flex-1 p-4 md:p-6 overflow-y-auto custom-scrollbar bg-[#0a0a0a]">
+                                    <div className="bg-white/5 rounded-xl p-5 border border-white/10 min-h-full">
+                                        <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                            <FileText size={14} /> AI Transcript / Answer
+                                        </h4>
+                                        <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                            {submission.transcriptTexts?.[activeVideoIndex] || 'Transcript not available for this question.'}
+                                        </p>
+                                    </div>
                                 </div>
                             </div>
                         </div>
