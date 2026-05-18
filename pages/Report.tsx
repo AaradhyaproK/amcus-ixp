@@ -83,6 +83,21 @@ const ProfileDetailItem: React.FC<{ label: string; value?: string | React.ReactN
     );
 };
 
+const isDocxFile = (url?: string): boolean => {
+  if (!url) return false;
+  const lowerUrl = url.toLowerCase();
+  return lowerUrl.includes('.docx') || lowerUrl.includes('.doc') || lowerUrl.includes('/docx') || lowerUrl.includes('/doc');
+};
+
+const getResumeViewUrl = (url?: string): string => {
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+  if (isDocxFile(url)) {
+    return `https://docs.google.com/gview?url=${encodeURIComponent(url)}&embedded=true`;
+  }
+  return url;
+};
+
 const InterviewReport: React.FC = () => {
   const navigate = useNavigate();
   const messageBox = useMessageBox();
@@ -670,7 +685,7 @@ const InterviewReport: React.FC = () => {
                             <div className="flex items-center gap-2 max-w-xs sm:max-w-sm">
                                 <i className="fas fa-eye text-blue-500"></i> 
                                 <button onClick={() => setIsResumeModalOpen(true)} className="text-blue-500 hover:underline truncate font-medium text-left" title="View Resume Inline">
-                                    View Resume (PDF)
+                                    View Resume {isDocxFile(submission.candidateResumeURL) ? '(Word)' : '(PDF)'}
                                 </button>
                             </div>
                         )}
@@ -1007,7 +1022,7 @@ const InterviewReport: React.FC = () => {
                 <div className="w-full xl:w-1/2 xl:sticky xl:top-24 h-[80vh] xl:h-[calc(100vh-8rem)] rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm bg-white dark:bg-[#111] overflow-hidden flex flex-col">
                     <div className="flex justify-between items-center p-4 border-b border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/5">
                         <h3 className="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-2">
-                            <FileText size={16} className="text-primary"/> Original Resume PDF
+                            <FileText size={16} className="text-primary"/> Original Resume {isDocxFile(submission.candidateResumeURL) ? '(Word)' : '(PDF)'}
                         </h3>
                         <a href={submission.candidateResumeURL} target="_blank" rel="noopener noreferrer" className="text-xs flex items-center gap-1.5 text-primary hover:underline font-medium px-3 py-1 bg-primary/10 rounded-lg ml-auto mr-3">
                             <i className="fas fa-external-link-alt"></i> Open Full
@@ -1019,7 +1034,7 @@ const InterviewReport: React.FC = () => {
                              <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary mb-3"></div>
                              <span className="text-sm">Loading document...</span>
                          </div>
-                         <iframe src={submission.candidateResumeURL} className="absolute inset-0 w-full h-full border-none z-10" title="Resume Compare" />
+                         <iframe src={getResumeViewUrl(submission.candidateResumeURL)} className="absolute inset-0 w-full h-full border-none z-10 bg-white" title="Resume Compare" />
                     </div>
                 </div>
             )}
@@ -1099,7 +1114,7 @@ const InterviewReport: React.FC = () => {
                                       <span className="text-sm">Loading document...</span>
                                   </div>
                                   <iframe 
-                                      src={submission.candidateResumeURL}
+                                      src={getResumeViewUrl(submission.candidateResumeURL)}
                                       title="Candidate Resume"
                                       className="w-full h-full border-none absolute inset-0 z-10 bg-white"
                                   />
@@ -1167,7 +1182,7 @@ const InterviewReport: React.FC = () => {
                         {showResumeInVideo && (
                             <div className="w-1/2 border-r border-white/10 flex flex-col bg-white/5">
                                 {submission.candidateResumeURL && !submission.candidateResumeURL.startsWith('data:text/plain') ? (
-                                    <iframe src={submission.candidateResumeURL} className="w-full h-full border-none bg-white" title="Resume Document" />
+                                    <iframe src={getResumeViewUrl(submission.candidateResumeURL)} className="w-full h-full border-none bg-white" title="Resume Document" />
                                 ) : (
                                     <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
                                         <h4 className="font-bold text-white mb-4">Extracted Resume Text</h4>
