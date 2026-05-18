@@ -7,7 +7,7 @@ import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth'
 import { db, auth } from '../services/firebase';
 import { RevenueAreaChart, UserPieChart, JobBarChart } from '../components/AdminCharts';
 import { GShapeAnimation } from '../components/AdminAnimations';
-import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity } from 'lucide-react';
+import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity, Database, Key, Globe, Copy, Check, Code } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useMessageBox } from '../components/MessageBox';
 import Logo from '../components/Logo';
@@ -26,7 +26,7 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'jobs' | 'transactions' | 'submissions' | 'reviews'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'jobs' | 'transactions' | 'submissions' | 'reviews' | 'api'>('overview');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'candidate' | 'recruiter'>('all');
@@ -34,6 +34,13 @@ const AdminDashboard: React.FC = () => {
   const messageBox = useMessageBox();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const navigate = useNavigate();
+
+  // API Settings State
+  const [webhookUrl, setWebhookUrl] = useState('https://my-hrms.com/webhooks/candidate-reports');
+  const [isWebhookSaved, setIsWebhookSaved] = useState(false);
+  const [activeCodeTab, setActiveCodeTab] = useState<'curl' | 'node' | 'python'>('curl');
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
 
   // GSAP Animation Refs
   const dashboardRef = useRef<HTMLDivElement>(null);
@@ -552,7 +559,8 @@ const AdminDashboard: React.FC = () => {
               { id: 'reviews', label: 'Reviews', icon: Star, count: allReviews.filter(r => !r.approved).length },
               { id: 'submissions', label: 'Inbox', icon: MessageSquareIcon, count: contactSubmissions.length + bugReports.length },
               { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
-              { id: 'stats', label: 'Platform Stats', icon: Activity }
+              { id: 'stats', label: 'Platform Stats', icon: Activity },
+              { id: 'api', label: 'API & Integrations', icon: Database }
             ].map(item => (
               <button
                 key={item.id}
@@ -592,7 +600,8 @@ const AdminDashboard: React.FC = () => {
             { id: 'reviews', label: 'Reviews', icon: Star, count: allReviews.filter(r => !r.approved).length },
             { id: 'submissions', label: 'Inbox', icon: MessageSquareIcon, count: contactSubmissions.length + bugReports.length },
             { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
-            { id: 'stats', label: 'Platform Stats', icon: Activity }
+            { id: 'stats', label: 'Platform Stats', icon: Activity },
+            { id: 'api', label: 'API & Integrations', icon: Database }
           ].map(item => (
             <button
               key={item.id}
@@ -719,6 +728,16 @@ const AdminDashboard: React.FC = () => {
                       <div className="min-w-0 flex-1">
                         <div className="font-medium truncate">{u.fullname}</div>
                         <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                        <div 
+                          className="flex items-center gap-1 mt-1 font-mono text-[9px] text-gray-400 dark:text-gray-400/80 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded w-fit cursor-pointer transition-colors" 
+                          title="Click to copy User UID"
+                          onClick={() => {
+                            navigator.clipboard.writeText(u.id);
+                            messageBox.showSuccess(`Copied UID for ${u.fullname}!`);
+                          }}
+                        >
+                          <span>UID: {u.id}</span>
+                        </div>
                       </div>
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${u.accountStatus === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700'}`}>
                         {u.accountStatus || 'active'}
@@ -768,6 +787,16 @@ const AdminDashboard: React.FC = () => {
                         <td className="px-4 lg:px-6 py-4">
                           <div className="font-medium">{u.fullname}</div>
                           <div className="text-xs text-gray-500">{u.email}</div>
+                          <div 
+                            className="flex items-center gap-1 mt-1.5 font-mono text-[10px] text-gray-400 dark:text-gray-400/80 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded w-fit cursor-pointer transition-colors" 
+                            title="Click to copy User UID"
+                            onClick={() => {
+                              navigator.clipboard.writeText(u.id);
+                              messageBox.showSuccess(`Copied UID for ${u.fullname}!`);
+                            }}
+                          >
+                            <span>UID: {u.id}</span>
+                          </div>
                         </td>
                         <td className="px-4 lg:px-6 py-4"><span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-white/10 capitalize">{u.role}</span></td>
                         <td className="px-4 lg:px-6 py-4">
@@ -1020,6 +1049,226 @@ const AdminDashboard: React.FC = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'api' && (
+            <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                  <Database className="text-primary w-6 h-6 sm:w-7 sm:h-7" />
+                  REST API & Database Integrations
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Connect InterviewXpert with external databases, ATS platforms, HRMS dashboards, or custom webhook systems.
+                </p>
+              </div>
+
+              {/* API Credentials */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="card p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 text-primary font-bold">
+                    <Key size={18} />
+                    <span>Inward Integration (Receive Job Descriptions)</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    Use our secure REST API endpoint to automatically create interviews and generate questions from your external databases.
+                  </p>
+                  
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Inward REST Endpoint</label>
+                      <div className="flex items-center gap-2 px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl font-mono text-xs text-gray-700 dark:text-gray-300 break-all select-all">
+                        POST http://localhost:8080/api/jobs/receive
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Developer API Key</label>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl">
+                        <span className="font-mono text-xs text-gray-700 dark:text-gray-300 truncate">ix_live_test_api_key_123456789</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText('ix_live_test_api_key_123456789');
+                            setCopiedKey(true);
+                            setTimeout(() => setCopiedKey(false), 2000);
+                          }}
+                          className="text-gray-400 hover:text-primary transition-colors"
+                          title="Copy API Key"
+                        >
+                          {copiedKey ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="card p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm space-y-4">
+                  <div className="flex items-center gap-2 text-green-500 font-bold">
+                    <Globe size={18} />
+                    <span>Outward Integration (Send Candidate Reports)</span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
+                    Register a webhook delivery URL where InterviewXpert will automatically POST the complete candidate reports upon interview completion.
+                  </p>
+
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Outward Webhook URL</label>
+                      <div className="flex gap-2">
+                        <input 
+                          type="url" 
+                          value={webhookUrl}
+                          onChange={(e) => {
+                            setWebhookUrl(e.target.value);
+                            setIsWebhookSaved(false);
+                          }}
+                          placeholder="https://your-hrms-database.com/webhooks"
+                          className="flex-1 px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl text-xs text-gray-700 dark:text-gray-300 focus:outline-none focus:border-green-500/50"
+                        />
+                        <button 
+                          onClick={() => {
+                            setIsWebhookSaved(true);
+                            messageBox.showSuccess("Webhook URL successfully saved!");
+                          }}
+                          className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-xl text-xs font-semibold transition-colors shrink-0"
+                        >
+                          {isWebhookSaved ? "Saved ✓" : "Save"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Webhook Signature Secret</label>
+                      <div className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-black/20 border border-gray-200 dark:border-white/10 rounded-xl">
+                        <span className="font-mono text-xs text-gray-700 dark:text-gray-300 truncate">ix_webhook_secret_signature_987654321</span>
+                        <button 
+                          onClick={() => {
+                            navigator.clipboard.writeText('ix_webhook_secret_signature_987654321');
+                            setCopiedWebhook(true);
+                            setTimeout(() => setCopiedWebhook(false), 2000);
+                          }}
+                          className="text-gray-400 hover:text-green-500 transition-colors"
+                          title="Copy Signature Secret"
+                        >
+                          {copiedWebhook ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Developer Code Hub */}
+              <div className="card p-5 sm:p-6 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-gray-100 dark:border-white/5 pb-4">
+                  <div className="flex items-center gap-2 font-bold text-gray-800 dark:text-white">
+                    <Code size={18} className="text-primary" />
+                    <span>REST API Code Integration Snippets</span>
+                  </div>
+                  <div className="flex bg-gray-100 dark:bg-white/5 p-1 rounded-lg self-start sm:self-auto">
+                    {(['curl', 'node', 'python'] as const).map(tab => (
+                      <button
+                        key={tab}
+                        onClick={() => setActiveCodeTab(tab)}
+                        className={`px-3 py-1 rounded-md text-xs font-semibold uppercase transition-all ${activeCodeTab === tab ? 'bg-white dark:bg-white/10 shadow-sm text-primary' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+                      >
+                        {tab === 'node' ? 'Node.js' : tab}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 dark:bg-black/40 border border-gray-200 dark:border-white/5 rounded-xl p-4 overflow-x-auto max-h-[380px] custom-scrollbar font-mono text-xs text-gray-700 dark:text-zinc-300 leading-relaxed whitespace-pre font-medium">
+                  {activeCodeTab === 'curl' && (
+                    `curl -X POST http://localhost:8080/api/jobs/receive \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer ix_live_test_api_key_123456789" \\
+  -d '{
+    "title": "Machine Learning Engineer",
+    "description": "Looking for experts in PyTorch, TensorFlow, and NLP transformers.",
+    "department": "Artificial Intelligence",
+    "skills": "PyTorch, NLP, Transformers",
+    "experience": 3
+  }'`
+                  )}
+
+                  {activeCodeTab === 'node' && (
+                    `const fetch = require('node-fetch');
+
+const sendJobToInterviewXpert = async () => {
+  const url = 'http://localhost:8080/api/jobs/receive';
+  const apiKey = 'ix_live_test_api_key_123456789';
+
+  const payload = {
+    title: "Senior Full Stack developer",
+    description: "Solid proficiency in React, Node.js, and Postgres.",
+    department: "Engineering",
+    experience: 5,
+    skills: "React, Node.js, Postgres",
+    numQuestions: 5,
+    difficulty: "Medium"
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': \`Bearer \${apiKey}\`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const result = await res.json();
+    if (result.success) {
+      console.log("✅ Scheduled successfully in InterviewXpert!");
+      console.log(\`Interview URL: \${result.data.interviewLink}\`);
+    } else {
+      console.error(\`❌ Ingestion Failed: \${result.error}\`);
+    }
+  } catch (error) {
+    console.error("Connection failed:", error);
+  }
+};
+
+sendJobToInterviewXpert();`
+                  )}
+
+                  {activeCodeTab === 'python' && (
+                    `import requests
+
+def push_job_description():
+    url = "http://localhost:8080/api/jobs/receive"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": "Bearer ix_live_test_api_key_123456789"
+    }
+    
+    payload = {
+        "title": "Data Analyst",
+        "description": "Excellence in building interactive SQL & Tableau dashboard pipelines.",
+        "department": "Analytics Team",
+        "experience": 2,
+        "skills": "SQL, Tableau, Python",
+        "difficulty": "Medium"
+      }
+
+    try:
+        response = requests.post(url, json=payload, headers=headers)
+        data = response.json()
+        if data.get("success"):
+            print("✅ Scheduled successfully!")
+            print(f"Interview Link: {data['data']['interviewLink']}")
+        else:
+            print(f"❌ Error: {data.get('error')}")
+    except Exception as e:
+        print(f"Connection failed: {e}")
+
+push_job_description()`
+                  )}
+                </div>
               </div>
             </div>
           )}
