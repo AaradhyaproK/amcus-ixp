@@ -178,19 +178,35 @@ Based on the Job Description, the candidate's resume (provided in context), and 
    - **Goal:** Assess the candidate's **Role Fit**.
    - **Action:** Clearly state how well the candidate fits the role (e.g., Strong Fit, Moderate Fit, Partial Fit, Not a Fit). Explain WHY in 2–3 lines, referencing their resume and experience against the job description.
 
-**2. Answer Quality (Communication & Technical Skills):**
-   - **Goal:** Evaluate **Communication & Technical Skills**.
-   - **Action:** Evaluate how clearly and effectively the candidate communicated (clarity, confidence, structure). Also, evaluate their technical/domain skills based on both resume and answers, mentioning if they demonstrate practical understanding.
+**2. Answer Quality (Technical & Domain Skills):**
+   - **Goal:** Evaluate **Technical & Domain Skills**.
+   - **Action:** Evaluate how clearly and effectively the candidate answered the technical and domain questions, mentioning if they demonstrate practical understanding.
 
-**3. Overall Evaluation (Summary):**
+**3. Communication Skills Analysis:**
+   - **Goal:** Assess candidate's **Communication Skills** style and quality.
+   - **Action:** Evaluate the candidate's spoken communication quality based on the specified parameters below:
+     - Fluency in English / Hindi / Marathi
+     - Clarity of Speech
+     - Confidence Level
+     - Grammar & Vocabulary
+     - Listening Skills
+     - Professional Tone
+     - Pronunciation / Accent Neutrality
+     - Ability to Explain Experience
+     - Response Speed & Presence of Mind
+     - Telephone Etiquette
+     - Interpersonal Skills
+     - Overall Communication Rating
+
+**4. Overall Evaluation (Summary):**
    - **Goal:** Provide a **Summary**.
    - **Action:** Write a concise 2–3 line summary of the candidate’s overall performance.
 
-**4. Verdict (Final Verdict):**
+**5. Verdict (Final Verdict):**
    - **Goal:** Give a clear **Final Verdict**.
    - **Action:** State if the candidate is a "Strong Hire", "Hire", "Leaning No", or "No Hire". Keep it professional and balanced.
 
-**5. Scoring (MANDATORY):**
+**6. Scoring (MANDATORY):**
    - **Resume Score:** A numerical score from 0-100 based on the resume's alignment with the JD.
    - **Q&A Score:** A numerical score from 0-100 based on the quality and accuracy of their answers.
    - **DO NOT** provide an "Overall Score". The application will calculate it.
@@ -205,9 +221,24 @@ Based on the Job Description, the candidate's resume (provided in context), and 
 - [Identify a key weakness or gap]
 
 **Answer Quality:**
-- [Bullet point analysis of answer quality]
-- [Comment on strongest/weakest answer]
-- [Overall communication style assessment]
+- [Bullet point analysis of technical answer quality]
+- [Comment on strongest/weakest technical answer]
+- [Overall technical skills assessment]
+
+**Communication Skills:**
+Fluency in English / Hindi / Marathi: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Clarity of Speech: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Confidence Level: [High | Medium | Low] - [1-sentence reason]
+Grammar & Vocabulary: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Listening Skills: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Professional Tone: [Professional | Casual | Unprofessional] - [1-sentence reason]
+Pronunciation / Accent Neutrality: [Neutral | Light Accent | Heavy Accent] - [1-sentence reason]
+Ability to Explain Experience: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Response Speed & Presence of Mind: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Telephone Etiquette: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Interpersonal Skills: [Excellent | Good | Average | Poor] - [1-sentence reason]
+Overall Communication Rating: [SCORE]/10
+Detailed Style Analysis: [A brief paragraph summarizing their communication style, strengths, and feedback]
 
 **Overall Evaluation:**
 [Your 1-2 sentence executive summary.]

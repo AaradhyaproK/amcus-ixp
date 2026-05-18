@@ -260,7 +260,17 @@ const InterviewReport: React.FC = () => {
 
         // 3. VERDICT & SCORES
         checkPage(35);
-        const { verdict, summary, roleFit, communicationSkills, technicalSkills } = parseFeedback(submission.feedback);
+        const { 
+            verdict, 
+            summary, 
+            roleFit, 
+            communicationSkills, 
+            technicalSkills,
+            hasDetailedComms,
+            communicationDetails,
+            overallCommsRating,
+            detailedStyleAnalysis
+        } = parseFeedback(submission.feedback);
         const vColor = verdictColor(verdict);
         const verdictBg = vColor.bg.includes('green') ? [236, 253, 245] : vColor.bg.includes('yellow') ? [254, 252, 232] : vColor.bg.includes('red') ? [254, 242, 242] : [241, 245, 249];
         const verdictBorder = vColor.border.includes('green') ? [167, 243, 208] : vColor.border.includes('yellow') ? [252, 211, 77] : vColor.border.includes('red') ? [252, 165, 165] : [226, 232, 240];
@@ -330,7 +340,7 @@ const InterviewReport: React.FC = () => {
         const aiSections = [
             { title: 'Executive Summary', body: summary },
             { title: 'Role & Resume Fit', body: roleFit },
-            { title: 'Role Fit as per AI Interview', body: communicationSkills },
+            { title: 'Role Fit as per AI Interview', body: hasDetailedComms ? 'N/A' : communicationSkills },
             { title: 'Technical / Domain Skills', body: technicalSkills },
         ];
 
@@ -360,6 +370,70 @@ const InterviewReport: React.FC = () => {
             pdf.text(bodyLines, margin + 4, y);
             y += blockH + 6;
         });
+
+        // 5b. COMMUNICATION SKILLS ANALYSIS (NEW)
+        if (hasDetailedComms) {
+            drawSectionHeader("Communication Skills");
+            
+            // Draw Overall Rating info box
+            checkPage(20);
+            drawInfoBox('Overall Communication Rating', `${overallCommsRating}`, margin, y, contentW);
+            y += 20;
+
+            // Draw each parameter
+            const col1X = margin;
+            const col2X = margin + contentW / 2 + 4;
+            const colW = contentW / 2 - 4;
+            
+            const params = Object.entries(communicationDetails);
+            for (let i = 0; i < params.length; i++) {
+                checkPage(20);
+                const [key, item] = params[i];
+                const labelMap: Record<string, string> = {
+                    fluency: 'Fluency in Languages',
+                    clarity: 'Clarity of Speech',
+                    confidence: 'Confidence Level',
+                    grammar: 'Grammar & Vocab',
+                    listening: 'Listening Skills',
+                    tone: 'Professional Tone',
+                    accent: 'Pronunciation / Accent',
+                    explainExp: 'Explain Experience',
+                    presence: 'Presence of Mind',
+                    etiquette: 'Telephone Etiquette',
+                    interpersonal: 'Interpersonal Skills'
+                };
+                
+                const xPos = i % 2 === 0 ? col1X : col2X;
+                drawInfoBox(labelMap[key] || key, `${item.rating}${item.comment ? ' - ' + item.comment : ''}`, xPos, y, colW);
+                if (i % 2 !== 0 || i === params.length - 1) {
+                    y += 20;
+                }
+            }
+            y += 4;
+
+            if (detailedStyleAnalysis && detailedStyleAnalysis !== 'N/A') {
+                checkPage(24);
+                pdf.setFont('helvetica', 'bold');
+                pdf.setFontSize(10);
+                pdf.setTextColor(15, 23, 42);
+                
+                pdf.setFillColor(37, 99, 235);
+                pdf.rect(margin, y - 3, 1.5, 4, 'F');
+                
+                pdf.text("Communication Style Analysis", margin + 4, y);
+                y += 6;
+
+                pdf.setFont('helvetica', 'normal');
+                pdf.setFontSize(9);
+                pdf.setTextColor(71, 85, 105);
+                
+                const styleLines = pdf.splitTextToSize(detailedStyleAnalysis, contentW - 4);
+                const blockH = styleLines.length * 4.5 + 4;
+                checkPage(blockH + 5);
+                pdf.text(styleLines, margin + 4, y);
+                y += blockH + 6;
+            }
+        }
         y += 2;
 
         // 6. SESSION INTEGRITY
@@ -423,13 +497,17 @@ const InterviewReport: React.FC = () => {
         roleFit: 'N/A',
         communicationSkills: 'N/A',
         technicalSkills: 'N/A',
-        verdict: 'Not Available'
+        verdict: 'Not Available',
+        hasDetailedComms: false,
+        communicationDetails: {},
+        overallCommsRating: 'N/A',
+        detailedStyleAnalysis: 'N/A'
       };
     }
 
     const summaryMatch = feedback.match(/\*\*Overall Evaluation:\*\*([\s\S]*?)(?=\*\*Verdict:\*\*|\*\*Scores:\*\*|$)/);
     const roleFitMatch = feedback.match(/\*\*Resume Analysis:\*\*([\s\S]*?)(?=\*\*Answer Quality:\*\*|\*\*Scores:\*\*|$)/);
-    const answerQualityBlock = feedback.match(/\*\*Answer Quality:\*\*([\s\S]*?)(?=\*\*Overall Evaluation:\*\*|\*\*Scores:\*\*|$)/);
+    const answerQualityBlock = feedback.match(/\*\*Answer Quality:\*\*([\s\S]*?)(?=\*\*Communication Skills:\*\*|\*\*Overall Evaluation:\*\*|\*\*Scores:\*\*|$)/);
     
     let communicationSkills = 'N/A';
     let technicalSkills = 'N/A';
@@ -444,6 +522,57 @@ const InterviewReport: React.FC = () => {
       }
     }
 
+    // Parse Detailed Communication Skills if present
+    const commsBlockMatch = feedback.match(/\*\*Communication Skills:\*\*([\s\S]*?)(?=\*\*Overall Evaluation:\*\*|\*\*Verdict:\*\*|\*\*Scores:\*\*|$)/i);
+    const communicationDetails: Record<string, { rating: string; comment: string }> = {};
+    let overallCommsRating = 'N/A';
+    let detailedStyleAnalysis = 'N/A';
+    let hasDetailedComms = false;
+
+    if (commsBlockMatch && commsBlockMatch[1]) {
+        hasDetailedComms = true;
+        const blockText = commsBlockMatch[1];
+        
+        const params = [
+            { key: 'fluency', label: 'Fluency in English / Hindi / Marathi', pattern: /(?:Fluency in English \/ Hindi \/ Marathi):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'clarity', label: 'Clarity of Speech', pattern: /(?:Clarity of Speech):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'confidence', label: 'Confidence Level', pattern: /(?:Confidence Level):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'grammar', label: 'Grammar & Vocabulary', pattern: /(?:Grammar & Vocabulary):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'listening', label: 'Listening Skills', pattern: /(?:Listening Skills):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'tone', label: 'Professional Tone', pattern: /(?:Professional Tone):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'accent', label: 'Pronunciation \/ Accent Neutrality', pattern: /(?:Pronunciation \/ Accent Neutrality):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'explainExp', label: 'Ability to Explain Experience', pattern: /(?:Ability to Explain Experience):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'presence', label: 'Response Speed & Presence of Mind', pattern: /(?:Response Speed & Presence of Mind):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'etiquette', label: 'Telephone Etiquette', pattern: /(?:Telephone Etiquette):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im },
+            { key: 'interpersonal', label: 'Interpersonal Skills', pattern: /(?:Interpersonal Skills):\s*([^-]*?)(?:\s*-\s*([^\n]*))?$/im }
+        ];
+
+        params.forEach(p => {
+            const lines = blockText.split('\n');
+            let matched = false;
+            for (const line of lines) {
+                const m = line.match(p.pattern);
+                if (m) {
+                    communicationDetails[p.key] = {
+                        rating: m[1]?.trim() || 'N/A',
+                        comment: m[2]?.trim() || ''
+                    };
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                communicationDetails[p.key] = { rating: 'N/A', comment: '' };
+            }
+        });
+
+        const overallRatingMatch = blockText.match(/Overall Communication Rating:\s*([^\n]*)/i);
+        overallCommsRating = overallRatingMatch ? overallRatingMatch[1].trim() : 'N/A';
+
+        const styleMatch = blockText.match(/Detailed Style Analysis:\s*([\s\S]*)/i);
+        detailedStyleAnalysis = styleMatch ? styleMatch[1].trim() : 'N/A';
+    }
+
     const verdictMatch = feedback.match(/\*\*Verdict:\*\*\s*(.*)/);
     
     const keyStrengthMatch = feedback.match(/(?:-\s*)?Key strength:\s*([^\n]*)/i);
@@ -456,7 +585,11 @@ const InterviewReport: React.FC = () => {
         technicalSkills,
         verdict: verdictMatch ? verdictMatch[1].trim() : 'Not Available',
         keyStrength: keyStrengthMatch ? keyStrengthMatch[1].trim() : null,
-        keyWeakness: keyWeaknessMatch ? keyWeaknessMatch[1].trim() : null
+        keyWeakness: keyWeaknessMatch ? keyWeaknessMatch[1].trim() : null,
+        hasDetailedComms,
+        communicationDetails,
+        overallCommsRating,
+        detailedStyleAnalysis
     };
   };
 
@@ -480,7 +613,19 @@ const InterviewReport: React.FC = () => {
     );
   }
 
-  const { summary, roleFit, communicationSkills, technicalSkills, verdict, keyStrength, keyWeakness } = parseFeedback(submission.feedback);
+  const { 
+      summary, 
+      roleFit, 
+      communicationSkills, 
+      technicalSkills, 
+      verdict, 
+      keyStrength, 
+      keyWeakness,
+      hasDetailedComms,
+      communicationDetails,
+      overallCommsRating,
+      detailedStyleAnalysis
+  } = parseFeedback(submission.feedback);
   const vColor = verdictColor(verdict);
 
   return (
@@ -565,10 +710,18 @@ const InterviewReport: React.FC = () => {
                                 <strong className="text-gray-800 dark:text-gray-200 block mb-2 text-base">Role Fit:</strong> 
                                 <div className="bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{roleFit}</div>
                             </div>
-                            <div>
-                                <strong className="text-gray-800 dark:text-gray-200 block mb-2 text-base">Role Fit as per AI Interview:</strong> 
-                                <div className="bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{communicationSkills}</div>
-                            </div>
+                            {!hasDetailedComms && (
+                                <div>
+                                    <strong className="text-gray-800 dark:text-gray-200 block mb-2 text-base">Role Fit as per AI Interview:</strong> 
+                                    <div className="bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{communicationSkills}</div>
+                                </div>
+                            )}
+                            {technicalSkills && technicalSkills !== 'N/A' && (
+                                <div>
+                                    <strong className="text-gray-800 dark:text-gray-200 block mb-2 text-base">Technical / Domain Skills:</strong> 
+                                    <div className="bg-gray-50 dark:bg-black/20 p-4 rounded-xl border border-gray-100 dark:border-white/5 text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{technicalSkills}</div>
+                                </div>
+                            )}
                             {keyStrength && (
                                 <div>
                                     <strong className="text-gray-800 dark:text-gray-200 block mb-2 text-base">Key Strength:</strong> 
@@ -583,6 +736,74 @@ const InterviewReport: React.FC = () => {
                             )}
                         </div>
                     </div>
+
+                    {/* Detailed Communication Skills Card */}
+                    {hasDetailedComms && (
+                        <div className="bg-white dark:bg-white/5 rounded-2xl p-6 md:p-8 border border-gray-200 dark:border-white/10 shadow-sm transition-all duration-300">
+                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 border-b border-gray-100 dark:border-white/5 pb-4">
+                                <h2 className="text-xl font-bold flex items-center gap-3">
+                                    <MessageSquare size={24} className="text-primary"/> Communication Skills Analysis
+                                </h2>
+                                <div className="flex items-center gap-2 bg-primary/10 text-primary font-bold px-4 py-2 rounded-xl border border-primary/20">
+                                    <span className="text-xs uppercase tracking-wider text-primary/70">Overall Rating:</span>
+                                    <span className="text-lg">{overallCommsRating}</span>
+                                </div>
+                            </div>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                                {Object.entries(communicationDetails).map(([key, item]) => {
+                                    const labelMap: Record<string, string> = {
+                                        fluency: 'Fluency in English / Hindi / Marathi',
+                                        clarity: 'Clarity of Speech',
+                                        confidence: 'Confidence Level',
+                                        grammar: 'Grammar & Vocabulary',
+                                        listening: 'Listening Skills',
+                                        tone: 'Professional Tone',
+                                        accent: 'Pronunciation / Accent Neutrality',
+                                        explainExp: 'Ability to Explain Experience',
+                                        presence: 'Response Speed & Presence of Mind',
+                                        etiquette: 'Telephone Etiquette',
+                                        interpersonal: 'Interpersonal Skills'
+                                    };
+                                    
+                                    const r = item.rating.toLowerCase();
+                                    let badgeColor = 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 border-gray-200 dark:border-gray-700';
+                                    if (r.includes('excellent') || r.includes('high') || r.includes('professional') || r.includes('neutral')) {
+                                        badgeColor = 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800/30';
+                                    } else if (r.includes('good') || r.includes('medium') || r.includes('light accent')) {
+                                        badgeColor = 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/20 dark:text-blue-400 dark:border-blue-800/30';
+                                    } else if (r.includes('average') || r.includes('casual') || r.includes('normal')) {
+                                        badgeColor = 'bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800/30';
+                                    } else if (r.includes('poor') || r.includes('low') || r.includes('unprofessional') || r.includes('heavy accent')) {
+                                        badgeColor = 'bg-red-50 text-red-700 border-red-200 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800/30';
+                                    }
+
+                                    return (
+                                        <div key={key} className="flex flex-col p-4 bg-gray-50/50 dark:bg-black/20 rounded-xl border border-gray-100 dark:border-white/5 shadow-sm hover:border-primary/20 dark:hover:border-primary/20 transition-all duration-200">
+                                            <div className="flex justify-between items-start gap-2 mb-1.5">
+                                                <span className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{labelMap[key]}</span>
+                                                <span className={`text-[11px] font-extrabold px-2.5 py-0.5 rounded-full border ${badgeColor}`}>
+                                                    {item.rating}
+                                                </span>
+                                            </div>
+                                            {item.comment && (
+                                                <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed font-medium mt-1">
+                                                    {item.comment}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {detailedStyleAnalysis && detailedStyleAnalysis !== 'N/A' && (
+                                <div className="mt-6 pt-4 border-t border-gray-100 dark:border-white/5">
+                                    <strong className="text-gray-800 dark:text-gray-200 block mb-2 text-sm uppercase tracking-wider font-bold">Style Analysis:</strong>
+                                    <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">{detailedStyleAnalysis}</p>
+                                </div>
+                            )}
+                        </div>
+                    )}
 
                     {/* Professional Details Card */}
                     {submission.candidateInfo && (

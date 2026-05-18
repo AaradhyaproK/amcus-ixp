@@ -11,7 +11,7 @@ const GROK_MODEL = "grok-4-1-fast-non-reasoning";
 // Questions: 5 template + AI-generated (~15 tokens each) → 280 safe headroom.
 // Feedback report: 3 short sections + 3 score lines (out of 10) → 300 sufficient.
 const MAX_TOKENS_QUESTIONS = 500;  // Increased for more robust questions
-const MAX_TOKENS_FEEDBACK   = 1200;  // Increased for accurate resume scoring
+const MAX_TOKENS_FEEDBACK   = 1800;  // Increased for accurate resume scoring and communication analysis
 
 // Resume cap: Provide much more context so the AI can give a specific, dynamic analysis
 // without relying on generic placeholders.

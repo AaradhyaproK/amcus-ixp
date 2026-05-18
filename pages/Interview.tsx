@@ -15,7 +15,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 // --- Types ---
-type WizardStep = 'validating' | 'collect-info' | 'instructions' | 'setup' | 'interview' | 'processing' | 'finish';
+type WizardStep = 'validating' | 'collect-info' | 'show-jd' | 'instructions' | 'setup' | 'interview' | 'processing' | 'finish';
 type CandidateInfo = { 
   name: string; 
   email: string; 
@@ -1421,7 +1421,7 @@ const CandidateInterviewFlow: React.FC = () => {
         transcriptTexts: Array(questions.length).fill(null),
         pendingResponseCount: 0,
       }));
-      setStep('instructions');
+      setStep('show-jd');
     } catch (err: any) {
         let displayError = "Failed to process resume. Please try again later.";
         try {
@@ -1504,6 +1504,109 @@ const CandidateInterviewFlow: React.FC = () => {
             userProfile={userProfile}
           />
         )}
+      </Container>
+    );
+  }
+
+  if (step === 'show-jd') {
+    const formatLanguageName = (langCode: string) => {
+      const names: Record<string, string> = {
+        en: 'English',
+        hi: 'Hindi (हिंदी)',
+        mr: 'Marathi (मराठी)'
+      };
+      return names[langCode] || langCode.toUpperCase();
+    };
+
+    return (
+      <Container>
+        <div className="w-full max-w-3xl mx-auto px-4 py-2 animate-in fade-in slide-in-from-bottom-6 duration-500">
+          {/* Header Banner */}
+          <div className="text-center mb-8">
+            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold border border-blue-100 dark:border-blue-800/50 mb-3 uppercase tracking-wider">
+              <i className="fas fa-briefcase"></i> Job Description Review
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-gray-900 dark:text-white leading-tight">
+              {interview.title}
+            </h2>
+            {interview.department && (
+              <p className="text-sm font-semibold text-gray-500 dark:text-gray-400 mt-1.5">
+                Department: {interview.department}
+              </p>
+            )}
+          </div>
+
+          {/* Key Parameters Cards Grid - Capable for Mobile */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {/* Duration */}
+            <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-gray-200/60 dark:border-white/10 shadow-sm flex flex-col items-center text-center transition-all duration-300 hover:border-primary/20 hover:shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-2.5">
+                <i className="fas fa-clock text-lg"></i>
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Duration</span>
+              <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200 mt-0.5">{interview.duration} mins</span>
+            </div>
+
+            {/* Difficulty */}
+            <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-gray-200/60 dark:border-white/10 shadow-sm flex flex-col items-center text-center transition-all duration-300 hover:border-primary/20 hover:shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-2.5">
+                <i className="fas fa-tachometer-alt text-lg"></i>
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Difficulty</span>
+              <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200 mt-0.5">{interview.difficulty}</span>
+            </div>
+
+            {/* Strictness */}
+            <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-gray-200/60 dark:border-white/10 shadow-sm flex flex-col items-center text-center transition-all duration-300 hover:border-primary/20 hover:shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 flex items-center justify-center mb-2.5">
+                <i className="fas fa-shield-alt text-lg"></i>
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Strictness</span>
+              <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200 mt-0.5">{interview.strictness || 'Medium'}</span>
+            </div>
+
+            {/* Language */}
+            <div className="bg-white dark:bg-white/5 p-4 rounded-2xl border border-gray-200/60 dark:border-white/10 shadow-sm flex flex-col items-center text-center transition-all duration-300 hover:border-primary/20 hover:shadow-md">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-2.5">
+                <i className="fas fa-globe text-lg"></i>
+              </div>
+              <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-widest">Language</span>
+              <span className="text-sm font-extrabold text-gray-800 dark:text-gray-200 mt-0.5">{formatLanguageName(interviewState.language)}</span>
+            </div>
+          </div>
+
+          {/* Job Description details box */}
+          <div className="bg-white dark:bg-white/5 rounded-2xl border border-gray-200/60 dark:border-white/10 shadow-sm p-6 sm:p-8 mb-8">
+            <h3 className="text-base font-bold text-gray-900 dark:text-white uppercase tracking-wider mb-4 flex items-center gap-2 border-b border-gray-100 dark:border-white/5 pb-3">
+              <i className="fas fa-file-alt text-blue-500"></i> Role & Responsibilities
+            </h3>
+            
+            <div className="max-h-[350px] overflow-y-auto pr-3 custom-scrollbar text-sm text-gray-600 dark:text-gray-300 leading-relaxed space-y-4 whitespace-pre-wrap select-text selection:bg-blue-500/35">
+              {interview.description || "No job description details provided."}
+            </div>
+          </div>
+
+          {/* Action Callouts & Next button */}
+          <div className="bg-blue-50/50 dark:bg-blue-950/20 rounded-2xl border border-blue-100 dark:border-blue-900/30 p-5 mb-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-3 text-center sm:text-left">
+              <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 flex-shrink-0 flex items-center justify-center mx-auto sm:mx-0">
+                <i className="fas fa-info-circle text-lg"></i>
+              </div>
+              <div>
+                <h4 className="text-sm font-bold text-blue-900 dark:text-blue-200">Ready to begin?</h4>
+                <p className="text-xs text-blue-700/80 dark:text-blue-300/80 mt-0.5">Please review the details above. The next step will verify your audio and video.</p>
+              </div>
+            </div>
+            
+            <button 
+              onClick={() => setStep('instructions')}
+              className="w-full sm:w-auto px-8 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 hover:shadow-blue-500/30 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 group whitespace-nowrap"
+            >
+              Proceed to Hardware Check
+              <i className="fas fa-arrow-right text-sm transition-transform group-hover:translate-x-1"></i>
+            </button>
+          </div>
+        </div>
       </Container>
     );
   }
