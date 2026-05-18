@@ -113,7 +113,32 @@ export interface Interview {
   
 export interface InterviewSubmission {
   id: string;
-  candidateInfo?: { name: string; email: string; resumeText?: string; language?: string; };
+  candidateInfo?: { 
+    name: string; 
+    email: string; 
+    phone?: string;
+    gender?: string;
+    dob?: string;
+    age?: string;
+    maritalStatus?: string;
+    currentCity?: string;
+    nativePlace?: string;
+    qualificationBasic?: string;
+    qualificationPG?: string;
+    totalExperienceYears?: string;
+    totalExperienceMonths?: string;
+    currentCompanyName?: string;
+    designation?: string;
+    currentSalary?: string;
+    noticePeriodDays?: string;
+    reasonForJobChange?: string;
+    resumeUpdated?: string;
+    highlightedSkillsForJob?: string;
+    isFresher?: boolean;
+    resumeText?: string; 
+    language?: string; 
+    experienceType?: string;
+  };
   score: any;
   resumeScore?: any;
   qnaScore?: any;

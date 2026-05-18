@@ -20,28 +20,25 @@ type CandidateInfo = {
   name: string; 
   email: string; 
   phone: string; 
-  language: string;
-  resumeUpdated: string;
-  experienceType: string;
-  graduationYear?: string;
-  collegeName?: string;
-  degree?: string;
-  fieldOfStudy?: string;
-  specialization?: string;
-  branchSpecialization?: string;
-  workStatus?: string;
-  currentCompany?: string;
-  pastCompany?: string;
-  leaveDate?: string;
-  currentLocation: string;
-  readyToRelocate: string;
-  relocateReason?: string;
-  currentSalary: string;
-  expectedSalary: string;
-  hasSalaryProof: string;
+  gender: string;
+  dob: string;
+  age: string;
+  maritalStatus: string;
+  currentCity: string;
+  nativePlace: string;
+  qualificationBasic: string;
+  qualificationPG: string;
   totalExperienceYears: string;
   totalExperienceMonths: string;
-  highlightedSkillsForJob?: string;
+  currentCompanyName: string;
+  designation: string;
+  currentSalary: string;
+  noticePeriodDays: string;
+  reasonForJobChange: string;
+  resumeUpdated: string;
+  highlightedSkillsForJob: string;
+  isFresher: boolean;
+  language: string;
 };
 
 // --- Sarvam AI Transcription Helper ---
@@ -249,29 +246,25 @@ const CandidateInfoForm: React.FC<{
   const [language, setLanguage] = useState('en');
 
   // Pre-interview questionnaire states
-  const [resumeUpdated, setResumeUpdated] = useState('yes');
-  const [experienceType, setExperienceType] = useState('fresher'); 
-  const [graduationYear, setGraduationYear] = useState('');
-  const [collegeName, setCollegeName] = useState('');
-  const [degree, setDegree] = useState('');
-  const [degreeOther, setDegreeOther] = useState('');
-  const [fieldOfStudy, setFieldOfStudy] = useState('');
-  const [fieldOfStudyOther, setFieldOfStudyOther] = useState('');
-  const [specialization, setSpecialization] = useState('');
-  const [specializationOther, setSpecializationOther] = useState('');
-  const [workStatus, setWorkStatus] = useState('working'); 
-  const [currentCompany, setCurrentCompany] = useState('');
-  const [pastCompany, setPastCompany] = useState('');
-  const [leaveDate, setLeaveDate] = useState('');
-  const [currentLocation, setCurrentLocation] = useState('');
-  const [readyToRelocate, setReadyToRelocate] = useState('yes');
-  const [relocateReason, setRelocateReason] = useState('');
-  const [currentSalary, setCurrentSalary] = useState('');
-  const [expectedSalary, setExpectedSalary] = useState('');
-  const [hasSalaryProof, setHasSalaryProof] = useState('yes');
+  const [gender, setGender] = useState('');
+  const [dob, setDob] = useState('2000-01-01');
+  const [maritalStatus, setMaritalStatus] = useState('');
+  const [currentCity, setCurrentCity] = useState('');
+  const [nativePlace, setNativePlace] = useState('');
+  const [qualificationBasic, setQualificationBasic] = useState('');
+  const [qualificationPG, setQualificationPG] = useState('');
   const [totalExperienceYears, setTotalExperienceYears] = useState('');
   const [totalExperienceMonths, setTotalExperienceMonths] = useState('');
+  const [currentCompanyName, setCurrentCompanyName] = useState('');
+  const [designation, setDesignation] = useState('');
+  const [currentSalary, setCurrentSalary] = useState('');
+  const [noticePeriodDays, setNoticePeriodDays] = useState('');
+  const [reasonForJobChange, setReasonForJobChange] = useState('');
+  const [resumeUpdated, setResumeUpdated] = useState('yes');
   const [highlightedSkillsForJob, setHighlightedSkillsForJob] = useState('');
+  const [manualSkillInput, setManualSkillInput] = useState('');
+  const [isFresher, setIsFresher] = useState(false);
+  const [formStep, setFormStep] = useState(1);
 
   const existingResumeUrl = userProfile?.resumeURL || userProfile?.resumeUrl;
 
@@ -279,16 +272,37 @@ const CandidateInfoForm: React.FC<{
       setErrorMsg(initialError);
   }, [initialError]);
 
+  const handleNext = () => {
+    if (formStep === 1) {
+      if (!name || !email || !phone || !gender || !dob || !maritalStatus || !currentCity || !nativePlace) {
+        setErrorMsg("Please fill in all contact and personal details.");
+        return;
+      }
+      setErrorMsg(null);
+      setFormStep(2);
+    } else if (formStep === 2) {
+      if (!qualificationBasic) {
+        setErrorMsg("Please provide your basic qualification.");
+        return;
+      }
+      if (!isFresher) {
+        if (!totalExperienceYears || !totalExperienceMonths || !currentCompanyName || !designation || !currentSalary || !noticePeriodDays || !reasonForJobChange) {
+          setErrorMsg("Please fill in all professional details.");
+          return;
+        }
+      }
+      setErrorMsg(null);
+      setFormStep(3);
+    }
+  };
+
+  const handlePrevious = () => {
+    setFormStep(prev => prev - 1);
+    setErrorMsg(null);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email) {
-      setErrorMsg("Please fill in your name and email.");
-      return;
-    }
-    if (!phone) {
-      setErrorMsg("Please provide your contact number.");
-      return;
-    }
     if (!resumeFile && !uploadedResumeUrl && !existingResumeUrl && !userProfile) {
       setErrorMsg("Please upload your resume.");
       return;
@@ -299,56 +313,25 @@ const CandidateInfoForm: React.FC<{
       return;
     }
 
-    // Questionnaire Validations
-    if (experienceType === 'fresher') {
-      const selectedDegree = degree === 'Other' ? degreeOther.trim() : degree;
-      const selectedFieldOfStudy = fieldOfStudy === 'Other' ? fieldOfStudyOther.trim() : fieldOfStudy;
-      const selectedSpecialization = specialization === 'Other' ? specializationOther.trim() : specialization;
-
-      if (!graduationYear) {
-        setErrorMsg("Please provide your graduation year.");
-        return;
+    let calculatedAge = '';
+    if (dob) {
+      const today = new Date();
+      const birthDate = new Date(dob);
+      let ageNum = today.getFullYear() - birthDate.getFullYear();
+      const m = today.getMonth() - birthDate.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+          ageNum--;
       }
-      if (!collegeName || !selectedDegree || !selectedFieldOfStudy || !selectedSpecialization) {
-        setErrorMsg("Please provide your college, degree, field of study, and specialization details.");
-        return;
-      }
-    }
-    if (experienceType === 'experienced') {
-      if (workStatus === 'working' && !currentCompany) {
-        setErrorMsg("Please provide your current company name.");
-        return;
-      }
-      if (workStatus === 'not_working' && (!pastCompany || !leaveDate)) {
-        setErrorMsg("Please provide your past company and the date you left.");
-        return;
-      }
-      if (!totalExperienceYears || !totalExperienceMonths) {
-        setErrorMsg("Please provide your total experience in years and months.");
-        return;
-      }
-    }
-    if (experienceType === 'experienced') {
-      if (!currentLocation) {
-          setErrorMsg("Please provide your current job location.");
-          return;
-      }
-      if (!currentSalary || !expectedSalary) {
-          setErrorMsg("Please provide your current and expected salary.");
-          return;
-      }
+      calculatedAge = ageNum.toString();
     }
 
     setErrorMsg(null);
-    const selectedDegree = degree === 'Other' ? degreeOther.trim() : degree;
-    const selectedFieldOfStudy = fieldOfStudy === 'Other' ? fieldOfStudyOther.trim() : fieldOfStudy;
-    const selectedSpecialization = specialization === 'Other' ? specializationOther.trim() : specialization;
 
     onSubmit({ 
-      name, email, phone, language,
-      resumeUpdated, experienceType, graduationYear, collegeName, degree: selectedDegree, fieldOfStudy: selectedFieldOfStudy, specialization: selectedSpecialization, branchSpecialization: selectedSpecialization, workStatus, currentCompany, pastCompany, leaveDate,
-      currentLocation, readyToRelocate, relocateReason, currentSalary, expectedSalary, hasSalaryProof,
-      totalExperienceYears, totalExperienceMonths, highlightedSkillsForJob
+      name, email, phone, gender, dob, age: calculatedAge, maritalStatus, currentCity, nativePlace,
+      qualificationBasic, qualificationPG, totalExperienceYears, totalExperienceMonths,
+      currentCompanyName, designation, currentSalary, noticePeriodDays, reasonForJobChange,
+      resumeUpdated, highlightedSkillsForJob, isFresher, language
     }, resumeFile, existingResumeUrl, uploadedResumeUrl || undefined);
   };
 
@@ -406,282 +389,320 @@ const CandidateInfoForm: React.FC<{
         {errorMsg && <div className="candidate-form-alert mb-4 p-3 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-sm">{errorMsg}</div>}
         
         <form onSubmit={handleSubmit} className="candidate-form-body space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Full Name <span className="text-red-500">*</span></label>
-              <input type="text" placeholder="John Doe" required value={name} onChange={e => setName(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
-            </div>
-            <div>
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Email Address <span className="text-red-500">*</span></label>
-              <input type="email" placeholder="Email Address" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Contact Number <span className="text-red-500">*</span></label>
-            <input type="tel" required placeholder="Contact Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
+          {/* Step Indicator */}
+          <div className="flex justify-between items-center mb-6">
+             <div className={`h-2 flex-1 rounded-l-full ${formStep >= 1 ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
+             <div className={`h-2 flex-1 mx-1 ${formStep >= 2 ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
+             <div className={`h-2 flex-1 rounded-r-full ${formStep >= 3 ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'}`}></div>
           </div>
 
-          <div className="candidate-form-section bg-gray-50 dark:bg-gray-900/30 p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
-            <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-3">Pre-interview details</h3>
-            
-            {/* Resume Verification */}
-            <div>
-               <label className="text-xs font-bold text-gray-500 block mb-1">Is your resume up to date?</label>
-               <select value={resumeUpdated} onChange={e => setResumeUpdated(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                  <option value="yes">Yes, it is updated</option>
-                  <option value="no">No, but I will update it later</option>
-               </select>
-            </div>
-            
-            {/* Experience Type */}
-            <div className="grid grid-cols-2 md:grid-cols-2 gap-2 mt-2">
-                <label className={`candidate-form-choice p-2 rounded-lg text-sm font-bold border transition-colors text-center cursor-pointer ${experienceType === 'fresher' ? 'is-active bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}>
-                    <input type="radio" name="experienceType" value="fresher" className="sr-only" checked={experienceType === 'fresher'} onChange={() => setExperienceType('fresher')} />
-                    Fresher
-                </label>
-                <label className={`candidate-form-choice p-2 rounded-lg text-sm font-bold border transition-colors text-center cursor-pointer ${experienceType === 'experienced' ? 'is-active bg-blue-100 border-blue-500 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 ring-1 ring-blue-500' : 'bg-white border-gray-200 text-gray-500 dark:bg-gray-800 dark:border-gray-700 dark:text-gray-400'}`}>
-                    <input type="radio" name="experienceType" value="experienced" className="sr-only" checked={experienceType === 'experienced'} onChange={() => setExperienceType('experienced')} />
-                    Experienced
-                </label>
-            </div>
-            
-            {/* Conditional Logic */}
-            {experienceType === 'fresher' && (
+          {formStep === 1 && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-1 mt-2">Graduation Year <span className="text-red-500">*</span></label>
-                   <input type="text" placeholder="e.g. 2024" required value={graduationYear} onChange={e => setGraduationYear(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-1 mt-2">College Name <span className="text-red-500">*</span></label>
-                   <input type="text" placeholder="e.g. ABC Institute of Technology" required value={collegeName} onChange={e => setCollegeName(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                 </div>
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-1">Degree <span className="text-red-500">*</span></label>
-                  <select required value={degree} onChange={e => setDegree(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all duration-200">
-                     <option value="" disabled>Select degree</option>
-                    <option value="B.Tech / B.E">B.Tech / B.E</option>
-                    <option value="B.Sc">B.Sc</option>
-                    <option value="B.Com">B.Com</option>
-                    <option value="BBA">BBA</option>
-                    <option value="BA">BA</option>
-                    <option value="Diploma">Diploma</option>
-                     <option value="Other">Other</option>
-                   </select>
-                 </div>
-                {degree === 'Other' && (
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 block mb-1">Degree (Other) <span className="text-red-500">*</span></label>
-                    <input type="text" required value={degreeOther} onChange={e => setDegreeOther(e.target.value)} placeholder="Type your degree" className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                )}
-                 <div>
-                  <label className="text-xs font-bold text-gray-500 block mb-1">Field of Study <span className="text-red-500">*</span></label>
-                  <select required value={fieldOfStudy} onChange={e => setFieldOfStudy(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all duration-200">
-                    <option value="" disabled>Select field of study</option>
-                    <option value="Technology / Engineering">Technology / Engineering</option>
-                    <option value="Science">Science</option>
-                    <option value="Commerce">Commerce</option>
-                    <option value="Business / Management">Business / Management</option>
-                    <option value="Arts / Humanities">Arts / Humanities</option>
-                     <option value="Other">Other</option>
-                   </select>
-                 </div>
-                {fieldOfStudy === 'Other' && (
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 block mb-1">Field of Study (Other) <span className="text-red-500">*</span></label>
-                    <input type="text" required value={fieldOfStudyOther} onChange={e => setFieldOfStudyOther(e.target.value)} placeholder="Type your field of study" className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                )}
                 <div>
-                  <label className="text-xs font-bold text-gray-500 block mb-1">Specialization <span className="text-red-500">*</span></label>
-                  <select required value={specialization} onChange={e => setSpecialization(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm transition-all duration-200">
-                    <option value="" disabled>Select specialization</option>
-                    <option value="Computer Science">Computer Science</option>
-                    <option value="Information Technology">Information Technology</option>
-                    <option value="Artificial Intelligence / Machine Learning">Artificial Intelligence / Machine Learning</option>
-                    <option value="Data Science">Data Science</option>
-                    <option value="Electronics & Communication">Electronics & Communication</option>
-                    <option value="Mechanical Engineering">Mechanical Engineering</option>
-                    <option value="Civil Engineering">Civil Engineering</option>
-                    <option value="Physics">Physics</option>
-                    <option value="Chemistry">Chemistry</option>
-                    <option value="Mathematics">Mathematics</option>
-                    <option value="Biology">Biology</option>
-                    <option value="Biotechnology">Biotechnology</option>
-                    <option value="Accounting">Accounting</option>
-                    <option value="Finance">Finance</option>
-                    <option value="Banking">Banking</option>
-                    <option value="Taxation">Taxation</option>
-                    <option value="Economics">Economics</option>
-                    <option value="Marketing">Marketing</option>
-                    <option value="Human Resources (HR)">Human Resources (HR)</option>
-                    <option value="Operations">Operations</option>
-                    <option value="International Business">International Business</option>
-                    <option value="Psychology">Psychology</option>
-                    <option value="Political Science">Political Science</option>
-                    <option value="Sociology">Sociology</option>
-                    <option value="History">History</option>
-                    <option value="English Literature">English Literature</option>
-                    <option value="Other">Other</option>
-                  </select>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Full Name <span className="text-red-500">*</span></label>
+                  <input type="text" placeholder="John Doe" required value={name} onChange={e => setName(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-                {specialization === 'Other' && (
-                  <div>
-                    <label className="text-xs font-bold text-gray-500 block mb-1">Specialization (Other) <span className="text-red-500">*</span></label>
-                    <input type="text" required value={specializationOther} onChange={e => setSpecializationOther(e.target.value)} placeholder="Type your specialization" className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {experienceType === 'experienced' && (
-              <div className="candidate-form-subsection space-y-4 border-l-2 border-blue-500/50 pl-4 mt-4">
-                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <div>
-                      <label className="text-xs font-bold text-gray-500 block mb-1">Total Experience <span className="text-red-500">*</span></label>
-                      <div className="flex gap-2">
-                         <input type="number" min="0" placeholder="Years" required value={totalExperienceYears} onChange={e => setTotalExperienceYears(e.target.value)} className="w-1/2 p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                         <input type="number" min="0" max="11" placeholder="Months" required value={totalExperienceMonths} onChange={e => setTotalExperienceMonths(e.target.value)} className="w-1/2 p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                      </div>
-                   </div>
-                   <div>
-                      <label className="text-xs font-bold text-gray-500 block mb-1">Current Work Status <span className="text-red-500">*</span></label>
-                      <select value={workStatus} onChange={e => setWorkStatus(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
-                        <option value="working">Currently Working</option>
-                        <option value="not_working">Not Working / On Break</option>
-                      </select>
-                   </div>
-                 </div>
-                 {workStatus === 'working' ? (
-                   <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">Current Company Name <span className="text-red-500">*</span></label>
-                     <input type="text" required value={currentCompany} onChange={e => setCurrentCompany(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                   </div>
-                 ) : (
-                   <div className="flex flex-col sm:flex-row gap-2">
-                     <div className="w-full sm:w-1/2">
-                       <label className="text-xs font-bold text-gray-500 block mb-1">Past Company Name <span className="text-red-500">*</span></label>
-                       <input type="text" required value={pastCompany} onChange={e => setPastCompany(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                     </div>
-                     <div className="w-full sm:w-1/2">
-                       <label className="text-xs font-bold text-gray-500 block mb-1">Leave Date (MM/YYYY) <span className="text-red-500">*</span></label>
-                       <input type="text" required placeholder="e.g. 05/2023" value={leaveDate} onChange={e => setLeaveDate(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                     </div>
-                   </div>
-                 )}
-                 <div>
-                   <label className="text-xs font-bold text-gray-500 block mb-1">Highlight skills as per job requirements (Optional)</label>
-                   <textarea
-                     value={highlightedSkillsForJob}
-                     onChange={e => setHighlightedSkillsForJob(e.target.value)}
-                     placeholder="e.g. React, Node.js, team leadership, client communication"
-                     rows={3}
-                     className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm resize-y"
-                   />
-                 </div>
-              </div>
-            )}
-            
-            {experienceType === 'experienced' && (
-              <>
-                {/* Location */}
-                <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                   <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">Current Job Location (City, State) <span className="text-red-500">*</span></label>
-                     <input type="text" required value={currentLocation} onChange={e => setCurrentLocation(e.target.value)} placeholder="e.g. Mumbai, Maharashtra" className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                   </div>
-                   <div>
-                     <div className="flex gap-2 items-start h-full md:mt-6 text-sm text-gray-700 dark:text-gray-300">
-                        <input type="checkbox" id="ready_relocate" checked={readyToRelocate === 'yes'} onChange={e => setReadyToRelocate(e.target.checked ? 'yes' : 'no')} className="mt-1 w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 dark:border-gray-600" />
-                        <div>
-                           <label htmlFor="ready_relocate" className="font-medium cursor-pointer">I am ready to relocate if required</label>
-                        </div>
-                     </div>
-                   </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Email Address <span className="text-red-500">*</span></label>
+                  <input type="email" placeholder="Email Address" required value={email} onChange={e => setEmail(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
                 </div>
-                {readyToRelocate === 'yes' && (
-                  <div className="mt-2">
-                     <label className="text-xs font-bold text-gray-500 block mb-1">Reason for Relocation</label>
-                     <input type="text" placeholder="e.g. Seeking better opportunities, family reasons" value={relocateReason} onChange={e => setRelocateReason(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
-                  </div>
-                )}
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1 block">Contact Number <span className="text-red-500">*</span></label>
+                <input type="tel" required placeholder="Contact Number" value={phone} onChange={e => setPhone(e.target.value)} className="w-full p-3 border border-gray-200 rounded-xl dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none" />
+              </div>
+
+              <div className="candidate-form-section bg-gray-50 dark:bg-gray-900/30 p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 mt-6">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-3">Personal Details</h3>
                 
-                {/* Salary */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                    <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">Current Salary (LPA) <span className="text-red-500">*</span></label>
-                     <input type="text" placeholder="e.g. 6.5" required value={currentSalary} onChange={e => setCurrentSalary(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Gender <span className="text-red-500">*</span></label>
+                     <select required value={gender} onChange={e => setGender(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="" disabled>Select</option>
+                        <option value="Male">Male</option>
+                        <option value="Female">Female</option>
+                        <option value="Other">Other</option>
+                     </select>
                    </div>
                    <div>
-                     <label className="text-xs font-bold text-gray-500 block mb-1">Expected Salary (LPA) <span className="text-red-500">*</span></label>
-                     <input type="text" placeholder="e.g. 10.0" required value={expectedSalary} onChange={e => setExpectedSalary(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Date of Birth <span className="text-red-500">*</span></label>
+                     <input type="date" required value={dob} onChange={e => setDob(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                   </div>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Marital Status <span className="text-red-500">*</span></label>
+                     <select required value={maritalStatus} onChange={e => setMaritalStatus(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="" disabled>Select</option>
+                        <option value="Single">Single</option>
+                        <option value="Married">Married</option>
+                        <option value="Divorced">Divorced</option>
+                        <option value="Widowed">Widowed</option>
+                     </select>
                    </div>
                 </div>
-                
-                <div className="candidate-salary-proof flex flex-col sm:flex-row justify-between sm:items-center bg-white dark:bg-gray-800/80 p-3 rounded-lg border border-gray-200 dark:border-gray-600 mt-4 gap-2">
-                   <span className="text-xs font-bold text-gray-600 dark:text-gray-400">Do you have salary slips/bank statements to support your current salary?</span>
-                   <div className="flex gap-2">
-                     <button type="button" onClick={() => setHasSalaryProof('yes')} className={`candidate-chip flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${hasSalaryProof === 'yes' ? 'is-active bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-400 border border-green-200 dark:border-green-800' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400'}`}>Yes</button>
-                     <button type="button" onClick={() => setHasSalaryProof('no')} className={`candidate-chip flex-1 sm:flex-none px-4 py-1.5 rounded-md text-xs font-bold transition-colors ${hasSalaryProof === 'no' ? 'is-active bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400 border border-red-200 dark:border-red-800' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:border-gray-600 dark:text-gray-400'}`}>No</button>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Current City <span className="text-red-500">*</span></label>
+                     <input type="text" placeholder="e.g. Mumbai" required value={currentCity} onChange={e => setCurrentCity(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                   </div>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Native Place <span className="text-red-500">*</span></label>
+                     <input type="text" placeholder="e.g. Pune" required value={nativePlace} onChange={e => setNativePlace(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
                    </div>
                 </div>
-              </>
-            )}
-          </div>
-          
-          {/* Hide Resume Upload entirely if the user is signed in (we use their Profile Box instead) */}
-          {!userProfile && (
-            <div className="candidate-resume-section bg-gray-50 dark:bg-gray-900/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
-              <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Resume Data</label>
-              <label
-                htmlFor="resume-upload-input"
-                className={`candidate-upload-trigger w-full font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 border cursor-pointer ${isUploadingResume ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-600 border-yellow-200' : uploadedResumeUrl ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800/60'} ${isUploadingResume ? 'opacity-70 cursor-not-allowed' : ''}`}
-              >
-                <i className={isUploadingResume ? "fas fa-spinner fa-spin" : uploadedResumeUrl ? "fas fa-check-circle" : "fas fa-cloud-upload-alt"}></i>
-                <span>{isUploadingResume ? 'Uploading to Cloudinary...' : uploadedResumeUrl ? 'Resume Uploaded Successfully' : resumeFile ? resumeFile.name : 'Browser/Upload Resume PDF'}</span>
-              </label>
-              <input
-                id="resume-upload-input"
-                type="file"
-                accept=".pdf"
-                className="hidden"
-                disabled={isUploadingResume}
-                onChange={async (e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    const file = e.target.files[0];
-                    setResumeFile(file);
-                    setIsUploadingResume(true);
-                    try {
-                      const url = await uploadToCloudinary(file, 'auto');
-                      setUploadedResumeUrl(url);
-                    } catch (err) {
-                      setErrorMsg("Failed to immediately upload to Cloudinary. You can still proceed.");
-                    } finally {
-                      setIsUploadingResume(false);
-                    }
-                  }
-                }}
-              />
-              
-              {uploadedResumeUrl && (
-                  <div className="mt-3 flex items-center justify-center flex-col">
-                       <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Direct Cloudinary Link:</p>
-                       <a href={uploadedResumeUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline text-center truncate px-2 w-full flex items-center justify-center gap-1">
-                           <i className="fas fa-external-link-alt py-1"></i> View Uploaded Resume
-                       </a>
-                  </div>
-              )}
-              <p className="text-xs text-gray-400 mt-3 text-center">Required for AI generated questions.</p>
               </div>
+            </div>
           )}
 
-          {/* The label is now inside the LanguageSelector component */}
-          <LanguageSelector selectedLanguage={language} onLanguageChange={setLanguage} className="pt-2" />
+          {formStep === 2 && (
+            <div className="candidate-form-section bg-gray-50 dark:bg-gray-900/30 p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-3">Qualifications</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div>
+                   <label className="text-xs font-bold text-gray-500 block mb-1">Basic Qualification (Year) <span className="text-red-500">*</span></label>
+                   <input type="text" placeholder="e.g. B.Tech (2020)" value={qualificationBasic} onChange={e => setQualificationBasic(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                 </div>
+                 <div>
+                   <label className="text-xs font-bold text-gray-500 block mb-1">Post Graduation (Year)</label>
+                   <input type="text" placeholder="e.g. MBA (2022)" value={qualificationPG} onChange={e => setQualificationPG(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                 </div>
+              </div>
 
-          <button type="submit" className="candidate-form-submit w-full bg-blue-600 text-white p-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5 mt-4">
-            Proceed to Interview
-          </button>
+              <div className="flex items-center justify-between mb-3 mt-6">
+                  <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider">Professional Details</h3>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={isFresher} onChange={e => setIsFresher(e.target.checked)} className="w-4 h-4 rounded text-blue-600 border-gray-300 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700" />
+                      <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">I am a Fresher</span>
+                  </label>
+              </div>
+              
+              {!isFresher && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                        <label className="text-xs font-bold text-gray-500 block mb-1">Total Work Experience <span className="text-red-500">*</span></label>
+                        <div className="flex gap-2">
+                           <input type="number" min="0" placeholder="Years" value={totalExperienceYears} onChange={e => setTotalExperienceYears(e.target.value)} className="w-1/2 p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                           <input type="number" min="0" max="11" placeholder="Months" value={totalExperienceMonths} onChange={e => setTotalExperienceMonths(e.target.value)} className="w-1/2 p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                        </div>
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Current Company Name <span className="text-red-500">*</span></label>
+                       <input type="text" placeholder="Company Name" value={currentCompanyName} onChange={e => setCurrentCompanyName(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Designation <span className="text-red-500">*</span></label>
+                       <input type="text" placeholder="e.g. Software Engineer" value={designation} onChange={e => setDesignation(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Current Salary (CTC Per annum) <span className="text-red-500">*</span></label>
+                       <input type="text" placeholder="e.g. 6.5 LPA" value={currentSalary} onChange={e => setCurrentSalary(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Notice Period (in number of days) <span className="text-red-500">*</span></label>
+                       <input type="number" min="0" placeholder="e.g. 30" value={noticePeriodDays} onChange={e => setNoticePeriodDays(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm" />
+                     </div>
+                     <div>
+                       <label className="text-xs font-bold text-gray-500 block mb-1">Reason for job change <span className="text-red-500">*</span></label>
+                       <select value={reasonForJobChange} onChange={e => setReasonForJobChange(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                          <option value="" disabled>Select reason</option>
+                          <option value="Salary Growth">Salary Growth</option>
+                          <option value="Professional Development">Professional Development</option>
+                          <option value="Job location not suitable">Job location not suitable</option>
+                          <option value="Job Timing not suitable">Job Timing not suitable</option>
+                          <option value="Company shut down / Layoff">Company shut down / Layoff</option>
+                          <option value="Currently not working">Currently not working</option>
+                          <option value="Prefer not to disclose">Prefer not to disclose</option>
+                       </select>
+                     </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {formStep === 3 && (
+            <div className="space-y-4 animate-in fade-in slide-in-from-right-4 duration-300">
+              <div className="candidate-form-section bg-gray-50 dark:bg-gray-900/30 p-5 rounded-xl border border-gray-200 dark:border-gray-700 space-y-4">
+                <h3 className="text-sm font-bold text-gray-800 dark:text-gray-200 uppercase tracking-wider mb-3">Additional Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Upload updated resume: <span className="text-red-500">*</span></label>
+                     <select required value={resumeUpdated} onChange={e => setResumeUpdated(e.target.value)} className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm">
+                        <option value="" disabled>Select</option>
+                        <option value="Yes">Yes, it is updated</option>
+                        <option value="No">No, but I will update it later</option>
+                     </select>
+                   </div>
+                   <div>
+                     <label className="text-xs font-bold text-gray-500 block mb-1">Select skills as per the JD (Optional)</label>
+                     <div className="flex flex-col gap-2">
+                       <select 
+                         className="w-full p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm text-gray-500"
+                         onChange={(e) => {
+                           if (e.target.value) {
+                             const currentSkills = highlightedSkillsForJob ? highlightedSkillsForJob.split(',').map(s => s.trim()).filter(s => s) : [];
+                             if (!currentSkills.includes(e.target.value)) {
+                               setHighlightedSkillsForJob([...currentSkills, e.target.value].join(', '));
+                             }
+                             e.target.value = "";
+                           }
+                         }}
+                       >
+                         <option value="">-- Add predefined skills --</option>
+                         {["JavaScript", "TypeScript", "React", "Node.js", "Python", "Java", "C#", "C++", "SQL", "MongoDB", "AWS", "Docker", "Kubernetes", "Machine Learning", "Data Science", "UI/UX Design", "Project Management", "Digital Marketing", "Sales", "Customer Support", "Accounting", "Tally", "ERP", "SAP"].map(skill => (
+                           <option key={skill} value={skill}>{skill}</option>
+                         ))}
+                       </select>
+                       <div className="flex gap-2">
+                         <input
+                           type="text"
+                           value={manualSkillInput}
+                           onChange={e => setManualSkillInput(e.target.value)}
+                           onKeyDown={e => {
+                             if (e.key === 'Enter') {
+                               e.preventDefault();
+                               const val = manualSkillInput.trim();
+                               if (val) {
+                                 const currentSkills = highlightedSkillsForJob ? highlightedSkillsForJob.split(',').map(s => s.trim()).filter(s => s) : [];
+                                 if (!currentSkills.includes(val)) {
+                                   setHighlightedSkillsForJob([...currentSkills, val].join(', '));
+                                 }
+                                 setManualSkillInput('');
+                               }
+                             }
+                           }}
+                           placeholder="Or type a skill and click Add"
+                           className="flex-1 p-2.5 border border-gray-200 rounded-lg dark:bg-gray-700/50 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                         />
+                         <button
+                           type="button"
+                           onClick={() => {
+                             const val = manualSkillInput.trim();
+                             if (val) {
+                               const currentSkills = highlightedSkillsForJob ? highlightedSkillsForJob.split(',').map(s => s.trim()).filter(s => s) : [];
+                               if (!currentSkills.includes(val)) {
+                                 setHighlightedSkillsForJob([...currentSkills, val].join(', '));
+                               }
+                               setManualSkillInput('');
+                             }
+                           }}
+                           className="px-4 py-2.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 font-bold rounded-lg border border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800/50 transition-colors whitespace-nowrap text-sm"
+                         >
+                           Add
+                         </button>
+                       </div>
+                       {highlightedSkillsForJob && (
+                         <div className="flex flex-wrap gap-2 mt-1">
+                           {highlightedSkillsForJob.split(',').map(s => s.trim()).filter(s => s).map(skill => (
+                             <span key={skill} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 text-xs font-semibold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                               {skill}
+                               <button 
+                                 type="button" 
+                                 onClick={() => {
+                                   const currentSkills = highlightedSkillsForJob.split(',').map(s => s.trim()).filter(s => s);
+                                   setHighlightedSkillsForJob(currentSkills.filter(s => s !== skill).join(', '));
+                                 }}
+                                 className="text-gray-400 hover:text-red-500 focus:outline-none transition-colors"
+                               >
+                                 <i className="fas fa-times text-[10px]"></i>
+                               </button>
+                             </span>
+                           ))}
+                         </div>
+                       )}
+                     </div>
+                   </div>
+                </div>
+              </div>
+              
+              {/* Hide Resume Upload entirely if the user is signed in (we use their Profile Box instead) */}
+              {!userProfile && (
+                <div className="candidate-resume-section bg-gray-50 dark:bg-gray-900/30 p-4 rounded-xl border border-gray-100 dark:border-gray-700">
+                  <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 block">Resume Data</label>
+                  <label
+                    htmlFor="resume-upload-input"
+                    className={`candidate-upload-trigger w-full font-bold py-3 px-4 rounded-xl transition-colors flex items-center justify-center gap-2 border cursor-pointer ${isUploadingResume ? 'bg-yellow-100 dark:bg-yellow-900/40 text-yellow-700 dark:text-yellow-600 border-yellow-200' : uploadedResumeUrl ? 'bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 border-green-200 dark:border-green-800' : 'bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 hover:bg-blue-200 dark:hover:bg-blue-800/60'} ${isUploadingResume ? 'opacity-70 cursor-not-allowed' : ''}`}
+                  >
+                    <i className={isUploadingResume ? "fas fa-spinner fa-spin" : uploadedResumeUrl ? "fas fa-check-circle" : "fas fa-cloud-upload-alt"}></i>
+                    <span>{isUploadingResume ? 'Uploading to Cloudinary...' : uploadedResumeUrl ? 'Resume Uploaded Successfully' : resumeFile ? resumeFile.name : 'Browser/Upload Resume PDF'}</span>
+                  </label>
+                  <input
+                    id="resume-upload-input"
+                    type="file"
+                    accept=".pdf"
+                    className="hidden"
+                    disabled={isUploadingResume}
+                    onChange={async (e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        setResumeFile(file);
+                        setIsUploadingResume(true);
+                        try {
+                          const url = await uploadToCloudinary(file, 'auto');
+                          setUploadedResumeUrl(url);
+                        } catch (err) {
+                          setErrorMsg("Failed to immediately upload to Cloudinary. You can still proceed.");
+                        } finally {
+                          setIsUploadingResume(false);
+                        }
+                      }
+                    }}
+                  />
+                  
+                  {uploadedResumeUrl && (
+                      <div className="mt-3 flex items-center justify-center flex-col">
+                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Direct Cloudinary Link:</p>
+                           <a href={uploadedResumeUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline text-center truncate px-2 w-full flex items-center justify-center gap-1">
+                               <i className="fas fa-external-link-alt py-1"></i> View Uploaded Resume
+                           </a>
+                      </div>
+                  )}
+                  <p className="text-xs text-gray-400 mt-3 text-center">Required for AI generated questions.</p>
+                  </div>
+              )}
+
+              {/* The label is now inside the LanguageSelector component */}
+              <LanguageSelector selectedLanguage={language} onLanguageChange={setLanguage} className="pt-2" />
+            </div>
+          )}
+
+          <div className="flex gap-4 mt-6">
+            {formStep > 1 && (
+              <button 
+                type="button" 
+                onClick={handlePrevious} 
+                className="w-1/3 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 p-3.5 rounded-xl font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                Previous
+              </button>
+            )}
+            
+            {formStep < 3 ? (
+              <button 
+                type="button" 
+                onClick={handleNext} 
+                className={`${formStep > 1 ? 'w-2/3' : 'w-full'} bg-blue-600 text-white p-3.5 rounded-xl font-bold hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all transform hover:-translate-y-0.5`}
+              >
+                Next Step
+              </button>
+            ) : (
+              <button 
+                type="submit" 
+                className="w-2/3 bg-green-600 text-white p-3.5 rounded-xl font-bold hover:bg-green-700 shadow-lg shadow-green-500/30 transition-all transform hover:-translate-y-0.5"
+              >
+                Proceed to Interview
+              </button>
+            )}
+          </div>
         </form>
       </div>
   );

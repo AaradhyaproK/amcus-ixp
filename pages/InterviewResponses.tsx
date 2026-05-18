@@ -323,7 +323,7 @@ const InterviewResponses: React.FC = () => {
           </button>
           <button
             onClick={handleShareClientLink}
-            className="w-full md:w-auto px-6 py-3 bg-purple-600 hover:bg-purple-700 text-white rounded-lg focus:ring-2 focus:ring-purple-500 font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
+            className="w-full md:w-auto px-6 py-3 bg-purple hover:bg-purple/90 text-white rounded-lg focus:ring-2 focus:ring-purple font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap shadow-sm"
           >
             <i className="fas fa-share-alt"></i> Share Shortlisted Profiles
           </button>
