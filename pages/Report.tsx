@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
+import { useTheme } from '../context/ThemeContext';
 import { createPortal } from 'react-dom';
 import { jsPDF } from 'jspdf';
 import { useMessageBox } from '../components/MessageBox';
@@ -101,6 +102,7 @@ const getResumeViewUrl = (url?: string): string => {
 const InterviewReport: React.FC = () => {
   const navigate = useNavigate();
   const messageBox = useMessageBox();
+  const { isDark } = useTheme();
   const { interviewId, submissionId } = useParams<{ interviewId: string; submissionId?: string }>();
   const [submission, setSubmission] = useState<InterviewSubmission | null>(null);
   const [loading, setLoading] = useState(true);
@@ -648,9 +650,30 @@ const InterviewReport: React.FC = () => {
         {/* Sticky Header */}
         <div className="sticky top-0 z-40 bg-white/80 dark:bg-[#0a0a0a]/80 backdrop-blur-md rounded-2xl border border-gray-200 dark:border-white/10 mb-6 shadow-sm">
             <div className="max-w-6xl mx-auto flex justify-between items-center p-4">
-                <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors" title="Go Back">
-                    <ArrowLeft size={18} /> Back
-                </button>
+                <div className="flex items-center gap-4">
+                    <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-primary transition-colors mr-2" title="Go Back">
+                        <ArrowLeft size={18} /> Back
+                    </button>
+                    <a 
+                        href="https://interviewxpert.in" 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className="flex items-center hover:opacity-85 transition-opacity"
+                        title="Visit InterviewXpert"
+                    >
+                        <img 
+                            src={isDark ? 'http://localhost:3000/logo-partnership-dark.png' : 'http://localhost:3000/logo-partnership-light.png'} 
+                            alt="InterviewXpert Logo" 
+                            className="h-7 sm:h-9 object-contain"
+                            onError={(e) => {
+                                const origin = window.location.origin;
+                                e.currentTarget.src = isDark 
+                                    ? `${origin}/logo-partnership-dark.png` 
+                                    : `${origin}/logo-partnership-light.png`;
+                            }}
+                        />
+                    </a>
+                </div>
                 <div className="flex items-center gap-3">
                     <button 
                         onClick={handleShare}
