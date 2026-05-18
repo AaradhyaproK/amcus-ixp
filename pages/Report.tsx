@@ -91,7 +91,8 @@ const InterviewReport: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isResumeModalOpen, setIsResumeModalOpen] = useState(false);
   const [profileTextData, setProfileTextData] = useState<string>('');
-  const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [activeVideoIndex, setActiveVideoIndex] = useState<number | null>(null);
+  const [showResumeInVideo, setShowResumeInVideo] = useState<boolean>(false);
   const [isCompareMode, setIsCompareMode] = useState(false);
 
   useEffect(() => {
@@ -687,7 +688,7 @@ const InterviewReport: React.FC = () => {
                                 {submission.videoURLs?.[index] ? (
                                     <div 
                                         className="relative group aspect-video bg-gray-900 rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-lg transition-shadow"
-                                        onClick={() => setActiveVideo(submission.videoURLs![index]!)}
+                                        onClick={() => setActiveVideoIndex(index)}
                                     >
                                         <video src={submission.videoURLs[index]} className="w-full h-full object-cover opacity-70 group-hover:opacity-60 transition-opacity" />
                                         <div className="absolute inset-0 flex items-center justify-center">
@@ -846,20 +847,108 @@ const InterviewReport: React.FC = () => {
           document.body
         )}
 
-        {activeVideo && createPortal(
-            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4 md:p-8" onClick={() => setActiveVideo(null)}>
-                <div className="bg-black border border-white/10 rounded-2xl shadow-2xl w-full max-w-5xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
-                    <div className="flex justify-between items-center bg-black/50 p-4 border-b border-white/10">
-                        <h3 className="text-white font-semibold flex items-center gap-2"><Video size={18} /> Candidate Recording</h3>
-                        <button onClick={() => setActiveVideo(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-white/20 hover:text-white transition-colors">&times;</button>
+        {activeVideoIndex !== null && createPortal(
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4 md:p-8" onClick={() => setActiveVideoIndex(null)}>
+                <div 
+                    className={`bg-[#0a0a0a] border border-white/10 rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-all duration-300 ${showResumeInVideo ? 'w-full max-w-[95vw] h-[90vh]' : 'w-full max-w-5xl max-h-[90vh]'}`} 
+                    onClick={e => e.stopPropagation()}
+                >
+                    {/* Header */}
+                    <div className="flex justify-between items-center bg-white/5 p-4 border-b border-white/10 shrink-0">
+                        <div className="flex items-center gap-4">
+                            <h3 className="text-white font-semibold flex items-center gap-2">
+                                <Video size={18} className="text-primary"/> 
+                                Question {activeVideoIndex + 1} of {submission.questions?.length || 0}
+                            </h3>
+                            {submission.candidateResumeURL && (
+                                <button 
+                                    onClick={() => setShowResumeInVideo(!showResumeInVideo)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border flex items-center gap-2 ${showResumeInVideo ? 'bg-primary/20 text-primary border-primary/30' : 'bg-white/10 text-gray-300 border-white/10 hover:bg-white/20'}`}
+                                >
+                                    <FileText size={14} /> {showResumeInVideo ? 'Hide Resume' : 'View Resume'}
+                                </button>
+                            )}
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2 mr-4 border-r border-white/10 pr-4">
+                                <button 
+                                    disabled={activeVideoIndex === 0}
+                                    onClick={() => setActiveVideoIndex(prev => prev !== null && prev > 0 ? prev - 1 : prev)}
+                                    className="px-3 py-1.5 bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                                >
+                                    <ArrowLeft size={14} /> Prev
+                                </button>
+                                <button 
+                                    disabled={activeVideoIndex === (submission.questions?.length || 1) - 1}
+                                    onClick={() => setActiveVideoIndex(prev => prev !== null && prev < (submission.questions?.length || 1) - 1 ? prev + 1 : prev)}
+                                    className="px-3 py-1.5 bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
+                                >
+                                    Next <ArrowLeft size={14} className="rotate-180" />
+                                </button>
+                            </div>
+                            <button onClick={() => setActiveVideoIndex(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/10 text-white/70 hover:bg-red-500/20 hover:text-red-400 transition-colors">&times;</button>
+                        </div>
                     </div>
-                    <div className="aspect-video bg-black relative">
-                        <video
-                            controls
-                            autoPlay
-                            src={activeVideo}
-                            className="w-full h-full object-contain"
-                        />
+                    
+                    {/* Body */}
+                    <div className="flex flex-1 overflow-hidden">
+                        {/* Resume Panel (Left) */}
+                        {showResumeInVideo && (
+                            <div className="w-1/2 border-r border-white/10 flex flex-col bg-white/5">
+                                {submission.candidateResumeURL && !submission.candidateResumeURL.startsWith('data:text/plain') ? (
+                                    <iframe src={submission.candidateResumeURL} className="w-full h-full border-none bg-white" title="Resume Document" />
+                                ) : (
+                                    <div className="flex-1 p-6 overflow-y-auto custom-scrollbar">
+                                        <h4 className="font-bold text-white mb-4">Extracted Resume Text</h4>
+                                        <pre className="whitespace-pre-wrap text-sm text-gray-300 font-sans">{submission.candidateInfo?.resumeText || 'No resume data available.'}</pre>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                        
+                        {/* Video & Q&A Panel (Right) */}
+                        <div className={`${showResumeInVideo ? 'w-1/2' : 'w-full'} flex flex-col bg-black overflow-y-auto custom-scrollbar`}>
+                            {/* Video Player */}
+                            <div className="w-full aspect-video bg-black shrink-0 relative border-b border-white/10">
+                                {submission.videoURLs?.[activeVideoIndex] ? (
+                                    <video
+                                        key={submission.videoURLs[activeVideoIndex]} // Force re-render on source change
+                                        controls
+                                        autoPlay
+                                        src={submission.videoURLs[activeVideoIndex]}
+                                        className="w-full h-full object-contain"
+                                    />
+                                ) : (
+                                    <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-500">
+                                        <Video size={48} className="mb-4 opacity-50" />
+                                        <p className="text-lg font-medium text-gray-400">No Recording Available</p>
+                                        <p className="text-sm mt-2">The candidate did not record a video for this question.</p>
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Q&A Content */}
+                            <div className="flex-1 p-6 flex flex-col gap-6">
+                                <div>
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <Brain size={14} /> Question Asked
+                                    </h4>
+                                    <p className="text-lg font-semibold text-gray-200">
+                                        {submission.questions?.[activeVideoIndex] || 'Unknown Question'}
+                                    </p>
+                                </div>
+                                
+                                <div className="flex-1 bg-white/5 rounded-xl p-5 border border-white/10">
+                                    <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                                        <FileText size={14} /> AI Transcript / Answer
+                                    </h4>
+                                    <p className="text-sm text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                        {submission.transcriptTexts?.[activeVideoIndex] || 'Transcript not available for this question.'}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>, document.body

@@ -2543,3 +2543,46 @@ html.dark {
     transition: none !important;
   }
 }
+
+/* Light Mode Enhancements for Readiness Flow */
+:root:not(.dark) .readiness-frame {
+  background: #ffffff !important;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.08) !important;
+  border-color: rgb(var(--border-rgb) / 0.6) !important;
+}
+
+:root:not(.dark) .readiness-stage {
+  background: rgb(244 244 245 / 0.7) !important; /* Subtle gray */
+  border-color: rgb(var(--border-rgb) / 0.8) !important;
+}
+
+:root:not(.dark) .readiness-camera-panel,
+:root:not(.dark) .readiness-content-panel {
+  background: #ffffff !important;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.03) !important;
+  border-color: rgb(var(--border-rgb)) !important;
+}
+
+:root:not(.dark) .readiness-note-item,
+:root:not(.dark) .readiness-summary-item,
+:root:not(.dark) .readiness-network-item,
+:root:not(.dark) .readiness-phrase-card {
+  background: #ffffff !important;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.04) !important;
+}
+
+:root:not(.dark) .readiness-primary-btn {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8) !important;
+  color: #ffffff !important;
+}
+
+:root:not(.dark) .readiness-waveform {
+  background: #ffffff !important;
+}
+
+:root:not(.dark) .readiness-secondary-btn,
+:root:not(.dark) .readiness-audio-btn {
+  background: #ffffff !important;
+  border: 1px solid rgb(var(--border-rgb)) !important;
+  color: rgb(var(--foreground-rgb)) !important;
+}

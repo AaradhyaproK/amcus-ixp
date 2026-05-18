@@ -688,227 +688,7 @@ const CandidateInfoForm: React.FC<{
 };
 
 // --- Component: Virtual Avatar Instructions ---
-const VirtualAvatarInstructions: React.FC<{
-  interview: Interview;
-  state: InterviewState;
-  onStart: () => void;
-}> = ({ interview, state, onStart }) => {
-  const [isSpeaking, setIsSpeaking] = useState(true);
-  const [textIndex, setTextIndex] = useState(0);
-  const [speedStatus, setSpeedStatus] = useState<string | null>(null);
 
-  const checkSpeed = () => {
-    setSpeedStatus("Checking...");
-    const start = Date.now();
-    const img = new Image();
-    img.onload = () => {
-      const duration = (Date.now() - start) / 1000;
-      const speed = (50 * 8) / duration;
-      setSpeedStatus(speed > 1000 ? "Excellent" : speed > 500 ? "Good" : "Weak");
-    };
-    img.src = "https://i.ibb.co/3y9DKsB6/Yellow-and-Black-Illustrative-Education-Logo-1.png?t=" + start;
-  };
-
-  let scriptLines = [];
-  
-  if (state.language === 'hi') {
-    scriptLines = [
-      `${interview.title} ?? ?????? ?? ??? ???? AI ??????????? ??? ???? ?????? ???`,
-      `??? ?????? ${state.questions.length} ?????? ??????`,
-      `?? ?????? ???? ???????? ?? ????? ?? ????? ?? ?????? ????`,
-      `???????? ?????? ?? ????? ???? ?? ??? ???? ??? 2 ???? ??????`,
-      `????? ????????? ???? ?? ???? ????? ???? ?? ?? ?? ?? ???? ??????? ??? ????`,
-      `?? ?? ?????????? ????? ??, ????? ??? ????? ???? ?? ???? ??? ??????`,
-      `??????????! ?? ?? ????? ??? ?? ?? ??????????? ???? ?? ???? ????`
-    ];
-  } else if (state.language === 'mr') {
-    scriptLines = [
-      `${interview.title} ???? ?????????? ??????? AI ???????? ????? ?????? ???.`,
-      `???? ${state.questions.length} ?????? ?????.`,
-      `?? ?????? ??????? ???????? ??? ??? ?????????????? ?????? ????.`,
-      `???????? ????????? ????? ?????????? ?????????? ? ?????? ?????.`,
-      `????? ????? ?????? ???? ???????? ??? ?????? ???? ????????? ???????? ?????? ???.`,
-      `?? ?? ?????????? ????? ???, ???????? ??? ?????????? ?????? ????? ????.`,
-      `????????! ?????? ???? ???? ?????? ?????? ???? ??? ????.`
-    ];
-  } else {
-    scriptLines = [
-      `Welcome to your AI Interview for the role of ${interview.title}.`,
-      `There will be ${state.questions.length} questions in total.`,
-      `These questions are tailored based on your resume and the job description.`,
-      `You will have 2 minutes to answer each question.`,
-      `Please ensure your camera is on and you are in a quiet environment.`,
-      `This is a proctored test, so tab switching will be tracked.`,
-      `Best of luck! You can start the interview when you are ready.`
-    ];
-  }
-
-  const fullText = scriptLines.join(" ");
-
-  useEffect(() => {
-    // Map the short language code from candidate selection to BCP-47
-    const langMap: Record<string, string> = { en: 'en', hi: 'hi-IN', mr: 'mr-IN' };
-    const ttsLang = langMap[state.language] || 'en';
-
-    let currentTimeout: ReturnType<typeof setTimeout>;
-
-    const playAudio = () => {
-      speak(fullText, {
-        lang: ttsLang,
-        onEnd: () => {
-          setIsSpeaking(false);
-          setTextIndex(scriptLines.length);
-        },
-        onError: (err) => {
-          console.warn('[TTS] Error in instructions:', err);
-          setIsSpeaking(false);
-        }
-      });
-    };
-
-    // Delay start slightly for better UX
-    currentTimeout = setTimeout(() => {
-      playAudio();
-    }, 800);
-
-    // Simulate typewriter / bullet point progression based on time
-    // Roughly estimate 3 seconds per sentence for visual sync
-    const intervals = scriptLines.map((_, idx) => 
-      setTimeout(() => setTextIndex(idx + 1), (idx + 1) * 3000 + 800)
-    );
-
-    return () => {
-      clearTimeout(currentTimeout);
-      intervals.forEach(clearTimeout);
-      speak.stop();
-    };
-  }, [fullText, state.language, scriptLines.length]);
-
-  const handleSkip = () => {
-    speak.stop();
-    setIsSpeaking(false);
-    setTextIndex(scriptLines.length);
-  };
-
-  const handleStart = () => {
-    speak.stop();
-    onStart();
-  };
-
-  return (
-    <div className="w-full max-w-4xl bg-white dark:bg-gray-800 rounded-3xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden flex flex-col md:flex-row min-h-[500px]">
-      {/* Avatar Panel (Left) */}
-      <div className="w-full md:w-5/12 bg-gradient-to-br from-blue-900 via-indigo-900 to-purple-900 p-8 flex flex-col items-center justify-center relative overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute top-0 left-0 w-full h-full opacity-30 pointer-events-none">
-           <div className="absolute top-10 left-10 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-3xl animate-pulse"></div>
-           <div className="absolute top-10 right-10 w-32 h-32 bg-purple-500 rounded-full mix-blend-screen filter blur-3xl animate-pulse" style={{ animationDelay: '2s' }}></div>
-           <div className="absolute -bottom-8 left-20 w-32 h-32 bg-pink-500 rounded-full mix-blend-screen filter blur-3xl animate-pulse" style={{ animationDelay: '4s' }}></div>
-        </div>
-
-        {/* The Avatar */}
-        <div className="relative z-10 flex flex-col items-center">
-          <div className="relative w-40 h-40 flex items-center justify-center mb-6">
-            {/* Speaking rings */}
-            {isSpeaking && (
-              <>
-                <div className="absolute inset-0 bg-blue-500/30 rounded-full animate-ping" style={{ animationDuration: '2s' }}></div>
-                <div className="absolute inset-2 bg-purple-500/30 rounded-full animate-ping" style={{ animationDuration: '1.5s', animationDelay: '0.5s' }}></div>
-              </>
-            )}
-            <div className="relative z-10 w-32 h-32 bg-white/10 backdrop-blur-md border border-white/20 rounded-full shadow-[0_0_40px_rgba(79,70,229,0.3)] flex items-center justify-center">
-              <i className={`fas fa-robot text-6xl ${isSpeaking ? 'text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.8)]' : 'text-gray-400'} transition-colors duration-500`}></i>
-            </div>
-            
-            {/* Audio equalizer visualization when speaking */}
-            {isSpeaking && (
-               <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 flex items-end justify-center gap-1 h-8 w-24">
-                  {[...Array(5)].map((_, i) => (
-                     <div 
-                        key={i} 
-                        className="w-1.5 bg-green-400 rounded-t-sm animate-pulse"
-                        style={{
-                           height: `${Math.random() * 80 + 20}%`,
-                           animation: `pulse ${0.3 + Math.random() * 0.5}s ease-in-out infinite alternate`
-                        }}
-                     ></div>
-                  ))}
-               </div>
-            )}
-          </div>
-          
-          <h3 className="text-white text-xl font-bold tracking-wider mb-1">AI Assessor</h3>
-          <p className="text-blue-200 text-sm font-medium h-6">
-            {isSpeaking ? (
-              <span className="flex items-center gap-2">
-                <i className="fas fa-volume-up animate-bounce"></i> Speaking...
-              </span>
-            ) : (
-              <span className="flex items-center gap-2 text-gray-400">
-                <i className="fas fa-volume-mute"></i> Audio completed
-              </span>
-            )}
-          </p>
-        </div>
-      </div>
-
-      {/* Rules Panel (Right) */}
-      <div className="w-full md:w-7/12 p-6 md:p-8 flex flex-col z-10 bg-white dark:bg-gray-800">
-        <div className="flex-1">
-          <div className="mb-6 border-b border-gray-100 dark:border-gray-700 pb-4">
-             <div className="inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-full mb-2 border border-blue-100 dark:border-blue-800">
-               Role: {interview.title}
-             </div>
-             <h2 className="text-2xl font-bold text-gray-800 dark:text-white">Interview Instructions</h2>
-          </div>
-
-          <ul className="space-y-4">
-            {scriptLines.map((line, idx) => (
-              <li 
-                key={idx} 
-                className={`flex items-start gap-3 transition-all duration-700 transform ${
-                  idx <= textIndex ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-4 hidden'
-                }`}
-              >
-                <div className="mt-1 flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                  <i className="fas fa-check text-xs"></i>
-                </div>
-                <p className="text-gray-700 dark:text-gray-300 font-medium leading-relaxed">
-                  {line}
-                </p>
-              </li>
-            ))}
-          </ul>
-        </div>
-
-        <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center gap-4">
-           <div className="flex items-center gap-4 w-full sm:w-auto justify-center sm:justify-start">
-             <button onClick={checkSpeed} className="text-sm font-medium flex items-center gap-2 text-gray-500 hover:text-blue-600 transition-colors">
-               <i className="fas fa-wifi"></i> Speed {speedStatus && <span className={`px-2 py-0.5 rounded text-xs ${speedStatus.includes('Excellent') || speedStatus.includes('Good') ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{speedStatus}</span>}
-             </button>
-           </div>
-           
-           <div className="flex items-center gap-3 w-full sm:w-auto">
-             {isSpeaking && (
-               <button 
-                 onClick={handleSkip} 
-                 className="flex-1 sm:flex-none px-5 py-2.5 rounded-xl font-bold text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 dark:text-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors"
-               >
-                 Skip Audio
-               </button>
-             )}
-             <button 
-               onClick={handleStart} 
-               className="flex-1 sm:flex-none bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-8 py-2.5 rounded-xl font-bold hover:shadow-lg hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-             >
-               Start Interview <i className="fas fa-arrow-right"></i>
-             </button>
-           </div>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const InterviewReadinessOnboarding: React.FC<{
   interview: Interview;
@@ -921,7 +701,7 @@ const InterviewReadinessOnboarding: React.FC<{
     effectiveType: string | null;
     rtt: number | null;
     latency: number | null;
-    quality: 'checking' | 'strong' | 'fair' | 'weak' | 'offline';
+    quality: 'checking' | 'strong' | 'fair' | 'weak' | 'danger' | 'offline';
     message: string;
   };
 
@@ -1016,19 +796,18 @@ const InterviewReadinessOnboarding: React.FC<{
 
   const measureNetwork = async () => {
     const connection = (navigator as any).connection || (navigator as any).mozConnection || (navigator as any).webkitConnection;
-    const downlink = typeof connection?.downlink === 'number' ? connection.downlink : null;
     const effectiveType = typeof connection?.effectiveType === 'string' ? connection.effectiveType : null;
     const rtt = typeof connection?.rtt === 'number' ? connection.rtt : null;
 
     if (!navigator.onLine) {
       setNetworkState({
         online: false,
-        downlink,
+        downlink: null,
         effectiveType,
         rtt,
         latency: null,
         quality: 'offline',
-        message: 'You are offline.',
+        message: 'You are offline. Please check your internet connection.',
       });
       return;
     }
@@ -1036,52 +815,63 @@ const InterviewReadinessOnboarding: React.FC<{
     setNetworkState(prev => ({
       ...prev,
       online: true,
-      downlink,
       effectiveType,
       rtt,
       quality: 'checking',
-      message: 'Checking your connection...',
+      message: 'Testing your internet speed...',
     }));
 
-    let latency: number | null = null;
-
     try {
-      const startedAt = performance.now();
-      await fetch(`/metadata.json?t=${Date.now()}`, { cache: 'no-store' });
-      latency = Math.round(performance.now() - startedAt);
+      const start = performance.now();
+      // Using a slightly larger image (approx ~20KB) to test speed more accurately.
+      // 20KB = 160Kb. To get 2Mbps (2000Kbps), it should download in less than 80ms.
+      const response = await fetch(`https://res.cloudinary.com/dvzxfbcsd/image/upload/v1700000000/sample.jpg?cacheBust=${Date.now()}`);
+      
+      const blob = await response.blob();
+      const end = performance.now();
+      const durationSec = (end - start) / 1000;
+      
+      const fileSizeBits = blob.size * 8;
+      let calculatedMbps = (fileSizeBits / durationSec) / 1000000;
+      
+      // Fallback to navigator.connection if download was instant (cache hit etc)
+      if (durationSec < 0.05 && connection?.downlink) {
+          calculatedMbps = connection.downlink;
+      }
+
+      let quality: NetworkState['quality'] = 'strong';
+      let message = 'Connection is strong and ready.';
+
+      if (calculatedMbps < 2) {
+        quality = 'weak';
+        message = 'Connection is weak (below 2Mbps), but you can still proceed.';
+      } else if (calculatedMbps < 5) {
+        quality = 'fair';
+        message = 'Connection is fair (above 2Mbps). You can proceed.';
+      }
+
+      setNetworkState({
+        online: true,
+        downlink: parseFloat(calculatedMbps.toFixed(2)),
+        effectiveType,
+        rtt,
+        latency: Math.round(end - start),
+        quality,
+        message,
+      });
     } catch (error) {
-      latency = null;
+      console.error("Network speed test failed:", error);
+      // If the fetch fails entirely, assume offline or very bad connection
+      setNetworkState({
+        online: false,
+        downlink: null,
+        effectiveType,
+        rtt,
+        latency: null,
+        quality: 'weak',
+        message: 'Could not measure speed accurately, but you can still proceed.',
+      });
     }
-
-    let quality: NetworkState['quality'] = 'strong';
-    let message = 'Connection looks good.';
-
-    if (
-      effectiveType === 'slow-2g' ||
-      effectiveType === '2g' ||
-      (downlink !== null && downlink < 1) ||
-      (latency !== null && latency > 1400)
-    ) {
-      quality = 'weak';
-      message = 'Connection is weak, but you can continue.';
-    } else if (
-      effectiveType === '3g' ||
-      (downlink !== null && downlink < 4) ||
-      (latency !== null && latency > 700)
-    ) {
-      quality = 'fair';
-      message = 'Connection is usable.';
-    }
-
-    setNetworkState({
-      online: true,
-      downlink,
-      effectiveType,
-      rtt,
-      latency,
-      quality,
-      message,
-    });
   };
 
   const playStageAudio = () => {
@@ -1114,7 +904,7 @@ const InterviewReadinessOnboarding: React.FC<{
       setMicReady(false);
 
       if (!navigator.mediaDevices?.getUserMedia) {
-        setPermissionError('This browser does not support camera and microphone access.');
+        setPermissionError('This browser does not support camera/microphone access. Please use Chrome/Safari or check your phone settings.');
         return;
       }
 
@@ -1318,7 +1108,7 @@ const InterviewReadinessOnboarding: React.FC<{
               </div>
 
               <div className={`readiness-status ${cameraReady ? 'is-success' : 'is-danger'}`}>
-                {cameraReady ? 'Camera is ready.' : permissionError || 'Waiting for camera access.'}
+                {cameraReady ? 'Camera is ready.' : permissionError || 'Waiting for camera access. If blocked, check your phone/browser settings to allow permissions.'}
               </div>
             </div>
           </div>
@@ -1381,7 +1171,7 @@ const InterviewReadinessOnboarding: React.FC<{
                 </div>
               </div>
 
-              <div className={`readiness-status ${networkState.quality === 'weak' ? 'is-warning' : networkState.quality === 'offline' ? 'is-danger' : 'is-success'}`}>
+              <div className={`readiness-status ${networkState.quality === 'offline' ? 'is-danger' : networkState.quality === 'weak' ? 'is-warning' : 'is-success'}`}>
                 {networkState.message}
               </div>
 
@@ -1437,6 +1227,7 @@ const CandidateInterviewFlow: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, userProfile } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   // State
   const [step, setStep] = useState<WizardStep>('validating');
@@ -1644,6 +1435,13 @@ const CandidateInterviewFlow: React.FC = () => {
   // --- RENDER ---
   const Container = ({ children }: { children: React.ReactNode }) => (
     <div className="interview-flow-shell fixed inset-0 z-[9999] overflow-y-auto bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 flex flex-col items-center justify-start py-12 px-4 transition-colors duration-500">
+      <button 
+        onClick={toggleTheme}
+        className="absolute top-4 right-4 z-[10000] w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+        title="Toggle Theme"
+      >
+        {theme === 'dark' ? <i className="fas fa-sun text-lg"></i> : <i className="fas fa-moon text-lg"></i>}
+      </button>
       {children}
     </div>
   );
@@ -2329,6 +2127,7 @@ const InterviewSubmission: React.FC<{
   const [status, setStatus] = useState("Finalizing transcripts...");
   const [showCompletionPopup, setShowCompletionPopup] = useState(false);
   const [reportUrl, setReportUrl] = useState('');
+  const [finalScores, setFinalScores] = useState<{ overall: string, resume: string, qna: string } | null>(null);
   const navigate = useNavigate();
   const [factIndex, setFactIndex] = useState(0);
   const hasSubmittedRef = useRef(false);
@@ -2452,6 +2251,12 @@ const InterviewSubmission: React.FC<{
         // Calculate Overall Score based on the defined mathematical model
         const overallScoreNum = Math.round((resumeScoreNum * 0.4) + (qnaScoreNum * 0.6));
 
+        setFinalScores({
+          overall: (overallScoreNum / 10).toFixed(1),
+          resume: (resumeScoreNum / 10).toFixed(1),
+          qna: (qnaScoreNum / 10).toFixed(1)
+        });
+
         setStatus("Saving Report...");
         const attemptData = {
             ...finalState,
@@ -2515,9 +2320,31 @@ const InterviewSubmission: React.FC<{
             <p className="text-gray-600 dark:text-gray-400 mb-6">Your interview has been successfully submitted. The recruiter will be in touch with the next steps.</p>
             
             <div className="interview-completion-next bg-blue-50 dark:bg-blue-900/30 p-6 rounded-xl border border-blue-100 dark:border-blue-800">
-              <h4 className="font-semibold text-lg text-blue-800 dark:text-blue-300 mb-2">Next step</h4>
-              <p className="text-sm text-blue-700 dark:text-blue-400 mb-4">The recruiter can now review your submission.</p>
+              <h4 className="font-semibold text-lg text-blue-800 dark:text-blue-300 mb-2">Performance Scores</h4>
+              
+              {finalScores && (
+                <div className="flex justify-around items-center my-4 bg-white dark:bg-gray-800 rounded-lg p-4 shadow-sm border border-blue-100 dark:border-blue-700">
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{finalScores.overall} <span className="text-sm font-normal text-gray-500">/ 10</span></p>
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-widest mt-1">Overall</p>
+                  </div>
+                  <div className="w-px h-12 bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{finalScores.resume} <span className="text-sm font-normal text-gray-500">/ 10</span></p>
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-widest mt-1">Resume</p>
+                  </div>
+                  <div className="w-px h-12 bg-gray-200 dark:bg-gray-700"></div>
+                  <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-800 dark:text-gray-100">{finalScores.qna} <span className="text-sm font-normal text-gray-500">/ 10</span></p>
+                    <p className="text-[10px] sm:text-xs font-semibold text-gray-500 uppercase tracking-widest mt-1">Q&A</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-col gap-3">
+                <a href={`#${reportUrl}`} target="_blank" rel="noopener noreferrer" className="interview-completion-primary w-full bg-blue-600 text-white font-bold py-3 px-5 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20 transform hover:-translate-y-0.5 flex justify-center items-center gap-2">
+                  <i className="fa-solid fa-file-alt"></i> View Detailed Report
+                </a>
                 <button onClick={() => navigate('/submit-review')} className="interview-completion-primary w-full bg-gradient-to-r from-pink-500 to-orange-400 text-white font-bold py-3 px-5 rounded-lg hover:from-pink-600 hover:to-orange-500 transition-colors shadow-lg shadow-pink-500/20 transform hover:-translate-y-0.5 flex justify-center items-center gap-2">
                   <i className="fa-solid fa-star text-yellow-300"></i> Give Review
                 </button>
@@ -2525,10 +2352,7 @@ const InterviewSubmission: React.FC<{
             </div>
 
             <div className="mt-6 flex flex-col sm:flex-row gap-3">
-              <a href={`#${reportUrl}`} target="_blank" rel="noopener noreferrer" className="interview-completion-secondary flex-1 text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
-                View Submission Report
-              </a>
-              <button onClick={() => navigate('/')} className="interview-completion-secondary flex-1 text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
+              <button onClick={() => navigate('/')} className="interview-completion-secondary w-full text-center px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors">
                 Go to Homepage
               </button>
             </div>

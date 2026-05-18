@@ -79,8 +79,7 @@ IMPORTANT: Use simple, everyday Hindi that common people speak. Do NOT use heavy
 Rules:
 - Ask short, clear, straight-to-the-point questions.
 - No difficult or fancy language.
-- One question per line. No numbering, bullets, preamble, or closing text.
-- Output ONLY the questions, nothing else.`;
+- Output ONLY a valid JSON array of strings, nothing else. Example: ["Question 1", "Question 2"]`;
 
   const prompt =
 `Role: "${jobTitle}"
@@ -103,8 +102,20 @@ How to generate questions:
 
   try {
     const text = await grokGenerateWithResume(sys, prompt, base64Resume, mimeType, 0.5, BUDGET.QUESTIONS, resumeTextContent);
-    const clean = text.replace(/^\s*[\d\.\-\*\+]+\s*/gm, '').replace(/\*\*/g, '').trim();
-    return clean.split('\n').map(q => q.trim()).filter(q => q && q.length > 5).slice(0, numQuestions);
+    // Remove markdown code blocks if the AI includes them
+    const cleanJson = text.replace(/```json/g, '').replace(/```/g, '').trim();
+    
+    let parsedQuestions: string[];
+    try {
+      parsedQuestions = JSON.parse(cleanJson);
+      if (!Array.isArray(parsedQuestions)) throw new Error("Parsed result is not an array");
+    } catch (parseError) {
+      console.warn("Failed to parse JSON, falling back to line split:", text);
+      const cleanLine = text.replace(/^\s*[\d\.\-\*\+]+\s*/gm, '').replace(/\*\*/g, '').trim();
+      parsedQuestions = cleanLine.split('\n').map(q => q.trim()).filter(q => q && q.length > 5);
+    }
+
+    return parsedQuestions.slice(0, numQuestions);
   } catch (error: any) {
     console.error("Grok Generate Questions Error:", error);
     throw new Error(error.message || "Failed to generate questions");
