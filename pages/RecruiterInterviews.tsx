@@ -41,6 +41,19 @@ const RecruiterInterviews: React.FC = () => {
       message: string;
       interview: Interview;
   } | null>(null);
+
+  // Search and Filter States
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedDept, setSelectedDept] = useState('All');
+  const [dateMode, setDateMode] = useState<'range' | 'specific'>('range');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [specificDate, setSpecificDate] = useState('');
+
+  // Full Screen View Modals
+  const [fullJdModal, setFullJdModal] = useState<{ isOpen: boolean; title: string; description: string } | null>(null);
+  const [fullRosterModal, setFullRosterModal] = useState<{ isOpen: boolean; interview: Interview } | null>(null);
+
   const messageBox = useMessageBox();
   const navigate = useNavigate();
   const actionButtonClass = 'inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 text-xs font-semibold hover:bg-white dark:hover:bg-gray-800 transition-colors';
@@ -60,7 +73,7 @@ const RecruiterInterviews: React.FC = () => {
     const unsubscribe = onSnapshot(interviewsQuery, async (querySnapshot) => {
       const interviewsData = querySnapshot.docs
         .map(doc => ({ id: doc.id, ...doc.data() } as Interview))
-        .filter(interview => interview.isMock !== true)
+        .filter(interview => (interview as any).isMock !== true)
         .sort((a, b) => {
           const timeA = a.createdAt?.toMillis ? a.createdAt.toMillis() : a.createdAt?.seconds ? a.createdAt.seconds * 1000 : 0;
           const timeB = b.createdAt?.toMillis ? b.createdAt.toMillis() : b.createdAt?.seconds ? b.createdAt.seconds * 1000 : 0;
@@ -116,7 +129,8 @@ const RecruiterInterviews: React.FC = () => {
     let filesProcessed = 0;
     let filesWithErrors = 0;
 
-    const parsePromises = Array.from(files).map(async (file) => {
+    const parsePromises = Array.from(files).map(async (f) => {
+      const file = f as File;
       let text = '';
       try {
         if (file.type === 'application/pdf') {
@@ -329,6 +343,48 @@ const RecruiterInterviews: React.FC = () => {
     </div>
   );
 
+  const departments = ['All', ...Array.from(new Set(interviews.map(i => i.department).filter(Boolean)))];
+
+  const filteredInterviews = interviews.filter(interview => {
+    // 1. Search Query filter (title, department, description)
+    const matchesSearch = 
+      !searchQuery ||
+      interview.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      interview.department?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      interview.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      
+    // 2. Department filter
+    const matchesDept = selectedDept === 'All' || interview.department === selectedDept;
+    
+    // 3. Date range or specific date filter
+    let matchesDate = true;
+    if (interview.createdAt) {
+      const createdDate = interview.createdAt.toDate ? interview.createdAt.toDate() : new Date((interview.createdAt as any).seconds * 1000);
+      const createdTime = new Date(createdDate.getFullYear(), createdDate.getMonth(), createdDate.getDate()).getTime();
+
+      if (dateMode === 'specific' && specificDate) {
+        const spec = new Date(specificDate);
+        const specTime = new Date(spec.getFullYear(), spec.getMonth(), spec.getDate()).getTime();
+        if (createdTime !== specTime) matchesDate = false;
+      } else if (dateMode === 'range') {
+        if (startDate) {
+          const start = new Date(startDate);
+          const startTime = new Date(start.getFullYear(), start.getMonth(), start.getDate()).getTime();
+          if (createdTime < startTime) matchesDate = false;
+        }
+        if (endDate) {
+          const end = new Date(endDate);
+          const endTime = new Date(end.getFullYear(), end.getMonth(), end.getDate()).getTime();
+          if (createdTime > endTime) matchesDate = false;
+        }
+      }
+    } else if ((dateMode === 'specific' && specificDate) || (dateMode === 'range' && (startDate || endDate))) {
+      matchesDate = false;
+    }
+    
+    return matchesSearch && matchesDept && matchesDate;
+  });
+
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 p-4 md:p-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 border-b border-gray-200 dark:border-white/5">
@@ -338,13 +394,136 @@ const RecruiterInterviews: React.FC = () => {
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <Link to="/recruiter/invites" className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 font-semibold rounded-full shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm">
-            <i className="fas fa-address-book text-blue-500"></i> <span>Candidate Hub</span>
+            <i className="fas fa-address-book text-blue-500" title="Manage recruited candidates status roster"></i> <span>Candidate Hub</span>
           </Link>
           <Link to="/recruiter/interview/create" className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-dark text-white dark:text-black font-semibold rounded-full shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm">
-            <i className="fas fa-plus"></i> <span>Create New Interview</span>
+            <i className="fas fa-plus" title="Create a new interview route link"></i> <span>Create New Interview</span>
           </Link>
         </div>
       </div>
+
+      {/* Search & Filter Controls */}
+      <div className="bg-white dark:bg-[#111] p-4 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+          {/* Search bar */}
+          <div className="relative w-full md:max-w-xs">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 dark:text-gray-500 pointer-events-none">
+                  <i className="fas fa-search text-xs"></i>
+              </span>
+              <input 
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search interviews or JDs..."
+                  className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-zinc-800 rounded-xl bg-gray-50 dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  title="Type keywords to filter interviews by title, department, or JD description"
+              />
+          </div>
+
+          {/* Filters row */}
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-end">
+              {/* Dynamic Department Selector */}
+              <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Dept:</span>
+                  <select
+                      value={selectedDept}
+                      onChange={(e) => setSelectedDept(e.target.value)}
+                      className="px-2.5 py-1.5 border border-gray-200 dark:border-zinc-800 rounded-xl bg-gray-50 dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 text-xs font-semibold outline-none focus:ring-1 focus:ring-primary"
+                      title="Filter interviews by specific department"
+                  >
+                      {departments.map(dept => (
+                          <option key={dept} value={dept}>{dept}</option>
+                      ))}
+                  </select>
+              </div>
+
+              {/* Date Mode Toggle & Inputs */}
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-zinc-800 rounded-xl px-2.5 py-1 flex-wrap">
+                  {/* Mode Selector Toggle */}
+                  <div className="flex bg-gray-200 dark:bg-zinc-800 rounded-lg p-0.5 mr-1 shrink-0">
+                      <button
+                          type="button"
+                          onClick={() => setDateMode('range')}
+                          className={`px-2 py-0.5 text-[9px] font-bold rounded-md transition-all ${dateMode === 'range' ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                      >
+                          Range
+                      </button>
+                      <button
+                          type="button"
+                          onClick={() => setDateMode('specific')}
+                          className={`px-2 py-0.5 text-[9px] font-bold rounded-md transition-all ${dateMode === 'specific' ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                      >
+                          Specific
+                      </button>
+                  </div>
+
+                  {dateMode === 'specific' ? (
+                      <div className="flex items-center gap-1.5 shrink-0 animate-in fade-in duration-200">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">On Date:</span>
+                          <input
+                              type="date"
+                              value={specificDate}
+                              onChange={(e) => setSpecificDate(e.target.value)}
+                              className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
+                              title="Select a specific date to filter"
+                          />
+                      </div>
+                  ) : (
+                      <div className="flex items-center gap-1.5 shrink-0 flex-wrap animate-in fade-in duration-200">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">From:</span>
+                          <input
+                              type="date"
+                              value={startDate}
+                              onChange={(e) => setStartDate(e.target.value)}
+                              className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
+                              title="Select start date to filter"
+                          />
+                          <span className="text-gray-400 text-xs font-semibold">to</span>
+                          <input
+                              type="date"
+                              value={endDate}
+                              onChange={(e) => setEndDate(e.target.value)}
+                              className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
+                              title="Select end date to filter"
+                          />
+                      </div>
+                  )}
+              </div>
+
+              {/* Clear Filters Button */}
+              {(searchQuery || selectedDept !== 'All' || startDate || endDate || specificDate) && (
+                  <button
+                      onClick={() => {
+                          setSearchQuery('');
+                          setSelectedDept('All');
+                          setStartDate('');
+                          setEndDate('');
+                          setSpecificDate('');
+                      }}
+                      className="px-2.5 py-1.5 text-xs text-red-500 hover:text-red-600 font-bold transition-colors flex items-center gap-1"
+                      title="Reset all search queries and active filters to default state"
+                  >
+                      <i className="fas fa-undo-alt"></i> Clear
+                  </button>
+              )}
+          </div>
+      </div>
+
+      <style>{`
+        .custom-card-scrollbar::-webkit-scrollbar {
+          width: 4px;
+          height: 4px;
+        }
+        .custom-card-scrollbar::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .custom-card-scrollbar::-webkit-scrollbar-thumb {
+          background: rgba(156, 163, 175, 0.25);
+          border-radius: 9999px;
+        }
+        .custom-card-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: rgba(156, 163, 175, 0.45);
+        }
+      `}</style>
 
       {interviews.length === 0 ? (
         <div className="text-center py-16 bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 border-dashed">
@@ -354,152 +533,297 @@ const RecruiterInterviews: React.FC = () => {
             <p className="text-gray-500 dark:text-gray-400 mb-6">You haven't created any interviews yet.</p>
             <Link to="/recruiter/interview/create" className="text-primary font-medium hover:underline hover:text-primary-light transition-colors">Create your first interview</Link>
         </div>
-        ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {interviews.map(interview => (
-                <div key={interview.id} className="bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm p-6 flex flex-col">
-                    <div className="flex-grow">
-                        <div className="flex flex-col gap-4 mb-4 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">{interview.title}</h3>
-                                <p className="text-sm text-gray-500">{interview.department}</p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2 lg:justify-end">
-                                <Link
-                                    to={`/recruiter/interview/responses/${interview.id}`}
-                                    className={actionButtonClass}
-                                    title="View Responses"
-                                >
-                                    <i className="fas fa-eye text-blue-500"></i>
-                                    <span>View Responses</span>
-                                </Link>
-                                <button
-                                    type="button"
-                                    onClick={() => openInviteModal(interview)}
-                                    className={actionButtonClass}
-                                    title="Invite Candidates"
-                                >
-                                    <i className="fas fa-user-plus text-green-500"></i>
-                                    <span>Invite Candidates</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleSendBulkReminders(interview)}
-                                    className={actionButtonClass}
-                                    title="Send Reminders"
-                                    disabled={remindingInterviewId === interview.id}
-                                >
-                                    {remindingInterviewId === interview.id ? <i className="fas fa-spinner fa-spin text-purple-500"></i> : <i className="fas fa-bell text-purple-500"></i>}
-                                    <span>Send Reminders</span>
-                                </button>
-                                <Link
-                                    to={`/interview/${interview.id}`}
-                                    target="_blank"
-                                    className={actionButtonClass}
-                                    title="Open Interview"
-                                >
-                                    <i className="fas fa-external-link-alt text-gray-500 dark:text-gray-300"></i>
-                                    <span>Open Interview</span>
-                                </Link>
-                                <button
-                                    type="button"
-                                    onClick={() => setEditingJobId(interview.id)}
-                                    className={actionButtonClass}
-                                    title="Edit Interview"
-                                >
-                                    <i className="fas fa-pencil-alt text-amber-500"></i>
-                                    <span>Edit Interview</span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDelete(interview.id)}
-                                    className={`${actionButtonClass} text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40`}
-                                    title="Delete Interview"
-                                >
-                                    <i className="fas fa-trash"></i>
-                                    <span>Delete Interview</span>
-                                </button>
+      ) : (
+        <>
+          {filteredInterviews.length === 0 ? (
+            <div className="text-center py-16 bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm">
+                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400">
+                    <i className="fas fa-search text-base"></i>
+                </div>
+                <p className="text-gray-500 dark:text-gray-400 text-sm font-semibold">No interviews match your filters.</p>
+                <button
+                    onClick={() => {
+                        setSearchQuery('');
+                        setSelectedDept('All');
+                        setStartDate('');
+                        setEndDate('');
+                        setSpecificDate('');
+                    }}
+                    className="mt-3 text-xs font-bold text-primary hover:underline"
+                    title="Clear filters to view all interviews"
+                >
+                    Reset Filters
+                </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                {filteredInterviews.map(interview => (
+                <div key={interview.id} className="bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-white/10 p-5 flex flex-col h-[510px] justify-between transition-all duration-300 transform hover:-translate-y-1">
+                    
+                    {/* Upper Half: Header & Job Description */}
+                    <div>
+                        {/* Title Block */}
+                        <div className="mb-2">
+                            <h3 className="text-base font-extrabold text-gray-900 dark:text-white leading-snug line-clamp-2" title={interview.title}>
+                                {interview.title}
+                            </h3>
+                        </div>
+
+                        {/* Subheader Row: Department & Utility Actions */}
+                        <div className="flex justify-between items-center gap-4 mb-3">
+                            <p className="text-xs text-gray-400 dark:text-gray-500 font-semibold">
+                                {interview.department || "No Department"}
+                            </p>
+                            
+                            {/* Utility Row of Management Actions */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                {/* Open Link Tooltip */}
+                                <div className="relative group">
+                                    <Link 
+                                        to={`/interview/${interview.id}`} 
+                                        target="_blank" 
+                                        className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        title="Open Candidate Interview Portal (opens in a new tab)"
+                                    >
+                                        <i className="fas fa-external-link-alt text-xs"></i>
+                                    </Link>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Open Link
+                                    </div>
+                                </div>
+
+                                {/* Send Reminders Tooltip */}
+                                <div className="relative group">
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleSendBulkReminders(interview)} 
+                                        disabled={remindingInterviewId === interview.id}
+                                        className="p-1.5 hover:bg-purple-50 dark:hover:bg-purple-950/20 text-purple-600 hover:text-purple-700 dark:text-purple-400 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        title="Send reminder emails to all pending candidates"
+                                    >
+                                        {remindingInterviewId === interview.id ? <i className="fas fa-spinner fa-spin text-xs"></i> : <i className="fas fa-bell text-xs"></i>}
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Send Reminders
+                                    </div>
+                                </div>
+
+                                {/* Edit Detail Tooltip */}
+                                <div className="relative group">
+                                    <button 
+                                        type="button"
+                                        onClick={() => setEditingJobId(interview.id)} 
+                                        className="p-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        title="Edit interview details and parameters"
+                                    >
+                                        <i className="fas fa-pencil-alt text-xs"></i>
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Edit Details
+                                    </div>
+                                </div>
+
+                                {/* Delete Route Tooltip */}
+                                <div className="relative group">
+                                    <button 
+                                        type="button"
+                                        onClick={() => handleDelete(interview.id)} 
+                                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        title="Delete this interview permanently"
+                                    >
+                                        <i className="fas fa-trash text-xs"></i>
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Delete Route
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">{interview.description}</p>
-                        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10">
-                            <h4 className="text-sm font-semibold mb-3 text-gray-900 dark:text-white flex items-center justify-between">
-                                Candidates
-                                <span className={submissionsMap[interview.id]?.length > 0 ? "text-green-600 bg-green-100 dark:bg-green-900/40 px-2 py-0.5 rounded-full text-xs" : "text-gray-500 bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full text-xs"}>
-                                    {submissionsMap[interview.id]?.length || 0} Responses
+ 
+                        {/* Metadata Badges with custom hovers */}
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                            {/* Questions Count Badge */}
+                            <div className="relative group">
+                                <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold rounded border border-blue-100/50 dark:border-blue-900/20 flex items-center gap-1 shrink-0">
+                                    <i className="fas fa-question-circle"></i> {interview.questions?.length || (((interview as any).manualQuestions?.length || 0) + ((interview as any).numQuestions || 5))} Qs
                                 </span>
-                            </h4>
-                            <div className="flex flex-col gap-2 max-h-[160px] overflow-y-auto pr-1">
-                                {(() => {
-                                    const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
-                                    const submissions = submissionsMap[interview.id] || [];
-                                    const unifiedList: {email: string, hasSubmitted: boolean}[] = [];
-                                    
-                                    // 1. Add all actual submissions (invited or uninvited)
-                                    submissions.forEach(sub => {
-                                        unifiedList.push({ email: sub.candidateInfo?.email || 'N/A', hasSubmitted: true });
-                                    });
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    Questions: {interview.questions?.length || (((interview as any).manualQuestions?.length || 0) + ((interview as any).numQuestions || 5))}
+                                </div>
+                            </div>
 
-                                    // 2. Add explicitly invited members who haven't submitted yet
-                                    explicitEmails.forEach(email => {
-                                        const hasSubmitted = submissions.some(sub => (sub.candidateInfo?.email || '').toLowerCase() === email);
-                                        if (!hasSubmitted && !unifiedList.some(u => u.email.toLowerCase() === email)) {
-                                            unifiedList.push({ email, hasSubmitted: false });
-                                        }
-                                    });
+                            {/* Level Badge */}
+                            <div className="relative group">
+                                <span className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold rounded border border-purple-100/50 dark:border-purple-900/20 flex items-center gap-1 shrink-0" title="Assessment challenge difficulty level">
+                                    <i className="fas fa-brain"></i> {interview.difficulty || "Medium"}
+                                </span>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    Difficulty: {interview.difficulty || "Medium"}
+                                </div>
+                            </div>
 
-                                    if (unifiedList.length === 0) {
-                                        return <p className="text-xs text-gray-500 italic block">No candidates invited or responses received yet.</p>;
-                                    }
-
-                                    return unifiedList.map((cand, idx) => (
-                                        <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-[#1a1a1a] text-xs rounded-lg px-3 py-2 border border-gray-100 dark:border-white/5">
-                                            <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[180px]" title={cand.email}>{cand.email}</span>
-                                            {cand.hasSubmitted ? (
-                                                <span className="text-green-600 dark:text-green-400 font-semibold flex items-center gap-1.5 shrink-0">
-                                                    <i className="fas fa-check-circle"></i> Submitted
-                                                </span>
-                                            ) : (
-                                                <div className="flex items-center gap-2 shrink-0">
-                                                    <span className="text-yellow-600 dark:text-yellow-500 font-medium flex items-center gap-1.5">
-                                                        <i className="fas fa-clock"></i> Pending
-                                                    </span>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const candData = (interview as any).candidateData?.find((c: any) => c.email?.toLowerCase() === cand.email?.toLowerCase());
-                                                            const phone = candData?.phone || '';
-                                                            const link = `${window.location.origin}/#/interview/${interview.id}`;
-                                                            const msg = `👋 Hi there!\n\nWe're actively hiring for the *${interview.title}* role and we'd love to invite you to take our AI-powered interview to fast-track your application! 🌟\n\n🚀 *Start your interview here:* \n${link}\n\n🔑 *Your Access Code:* \n${interview.accessCode}\n\nIt only takes a few minutes and you can complete it whenever you're ready. Best of luck! 🎉`;
-                                                            setWhatsappModal({
-                                                                isOpen: true,
-                                                                email: cand.email,
-                                                                phone: phone === 'N/A' ? '' : phone,
-                                                                message: msg,
-                                                                interview: interview
-                                                            });
-                                                        }}
-                                                        className="inline-flex items-center gap-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 rounded-lg text-[10px] font-bold transition-all"
-                                                        title="Invite via WhatsApp Web"
-                                                    >
-                                                        <i className="fab fa-whatsapp"></i>
-                                                        <span>Invite</span>
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ));
-                                })()}
+                            {/* Strictness Badge */}
+                            {interview.strictness && (
+                                <div className="relative group">
+                                    <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-[10px] font-bold rounded border border-red-100/50 dark:border-red-900/20 flex items-center gap-1 shrink-0" title="AI Proctoring monitoring level active">
+                                        <i className="fas fa-shield-alt"></i> {interview.strictness}
+                                    </span>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Proctoring: {interview.strictness}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+ 
+                        {/* Job Description (JD) with Scrollbar */}
+                        <div className="mt-4">
+                            <div className="flex justify-between items-center mb-1">
+                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
+                                    Job Description
+                                </h4>
+                                <div className="relative group">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFullJdModal({ isOpen: true, title: interview.title, description: interview.description })}
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-0.5"
+                                        title="View full screen Job Description"
+                                    >
+                                        <i className="fas fa-expand-arrows-alt text-[9px]"></i>
+                                    </button>
+                                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Fullscreen JD
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="h-[75px] overflow-y-auto pr-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed custom-card-scrollbar">
+                                {interview.description || "No description provided."}
                             </div>
                         </div>
                     </div>
-                    <div className="mt-4 pt-4 border-t border-gray-200 dark:border-white/10 text-xs text-gray-500">
-                        Created on: {interview.createdAt?.toDate ? interview.createdAt.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}
+ 
+                    {/* Middle: Candidate List */}
+                    <div className="flex-grow flex flex-col min-h-0 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+                        <div className="flex justify-between items-center mb-2">
+                            <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
+                                <span>Track Roster</span>
+                                <div className="relative group">
+                                    <button
+                                        type="button"
+                                        onClick={() => setFullRosterModal({ isOpen: true, interview })}
+                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-0.5"
+                                        title="View full screen Track Roster with status search & invitation triggers"
+                                    >
+                                        <i className="fas fa-expand-arrows-alt text-[9px]"></i>
+                                    </button>
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                        Fullscreen Roster
+                                    </div>
+                                </div>
+                            </h4>
+                            <span 
+                                className={submissionsMap[interview.id]?.length > 0 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full text-[9px] font-extrabold border border-emerald-100 dark:border-emerald-900/20" : "text-gray-500 bg-gray-50 dark:bg-zinc-800 px-2 py-0.5 rounded-full text-[9px] font-extrabold border border-gray-100 dark:border-zinc-700/30"}
+                                title="Total candidate submissions received for this interview"
+                            >
+                                {submissionsMap[interview.id]?.length || 0} Responses
+                            </span>
+                        </div>
+                        <div className="flex-grow overflow-y-auto pr-1 space-y-1.5 custom-card-scrollbar max-h-[140px]">
+                            {(() => {
+                                const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
+                                const submissions = submissionsMap[interview.id] || [];
+                                const unifiedList: {email: string, hasSubmitted: boolean}[] = [];
+                                
+                                // 1. Add all actual submissions (invited or uninvited)
+                                submissions.forEach(sub => {
+                                    unifiedList.push({ email: sub.candidateInfo?.email || 'N/A', hasSubmitted: true });
+                                });
+
+                                // 2. Add explicitly invited members who haven't submitted yet
+                                explicitEmails.forEach(email => {
+                                    const hasSubmitted = submissions.some(sub => (sub.candidateInfo?.email || '').toLowerCase() === email);
+                                    if (!hasSubmitted && !unifiedList.some(u => u.email.toLowerCase() === email)) {
+                                        unifiedList.push({ email, hasSubmitted: false });
+                                    }
+                                });
+
+                                if (unifiedList.length === 0) {
+                                    return <p className="text-[11px] text-gray-400 italic block py-4 text-center">No candidates invited yet.</p>;
+                                }
+
+                                return unifiedList.map((cand, idx) => (
+                                    <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-black/20 text-[11px] rounded-lg px-2.5 py-1.5 border border-gray-100 dark:border-white/5">
+                                        <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px] lg:max-w-[155px]" title={cand.email}>
+                                            {cand.email}
+                                        </span>
+                                        {cand.hasSubmitted ? (
+                                            <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1 shrink-0">
+                                                <i className="fas fa-check-circle"></i> Submitted
+                                            </span>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="text-yellow-600 dark:text-yellow-500 font-semibold flex items-center gap-1">
+                                                    <i className="fas fa-clock"></i> Pending
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const candData = (interview as any).candidateData?.find((c: any) => c.email?.toLowerCase() === cand.email?.toLowerCase());
+                                                        const phone = candData?.phone || '';
+                                                        const link = `${window.location.origin}/#/interview/${interview.id}`;
+                                                        const msg = `👋 Hi there!\n\nWe're actively hiring for the *${interview.title}* role and we'd love to invite you to take our AI-powered interview to fast-track your application! 🌟\n\n🚀 *Start your interview here:* \n${link}\n\n🔑 *Your Access Code:* \n${interview.accessCode}\n\nIt only takes a few minutes and you can complete it whenever you're ready. Best of luck! 🎉`;
+                                                        setWhatsappModal({
+                                                            isOpen: true,
+                                                            email: cand.email,
+                                                            phone: phone === 'N/A' ? '' : phone,
+                                                            message: msg,
+                                                            interview: interview
+                                                        });
+                                                    }}
+                                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 rounded text-[9px] font-extrabold transition-all"
+                                                    title="Invite via WhatsApp Web"
+                                                >
+                                                    <i className="fab fa-whatsapp"></i>
+                                                    <span>Invite</span>
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                ));
+                            })()}
+                        </div>
                     </div>
+
+                    {/* Bottom: Divider & Call to Actions */}
+                    <div className="border-t border-gray-100 dark:border-white/5 pt-3 mt-3">
+                        <div className="flex items-center gap-2 mb-2">
+                            <button
+                                type="button"
+                                onClick={() => openInviteModal(interview)}
+                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                            >
+                                <i className="fas fa-user-plus text-xs"></i>
+                                <span>Invite Candidates</span>
+                            </button>
+                            <Link
+                                to={`/recruiter/interview/responses/${interview.id}`}
+                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-center"
+                            >
+                                <i className="fas fa-eye text-xs"></i>
+                                <span>View Responses</span>
+                            </Link>
+                        </div>
+                        <div className="flex justify-between items-center text-[9px] text-gray-400 dark:text-gray-500 font-medium px-0.5">
+                            <span>Created: {interview.createdAt?.toDate ? interview.createdAt.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</span>
+                            <span className="font-mono">ID: #{interview.id.substring(0, 8)}</span>
+                        </div>
+                    </div>
+
                 </div>
             ))}
-        </div>
-    )}
+            </div>
+          )}
+        </>
+      )}
 
     {isInviteModalOpen && selectedInterview && createPortal(
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -844,7 +1168,198 @@ const RecruiterInterviews: React.FC = () => {
         </div>,
         document.body
     )}
+
+    {fullJdModal && fullJdModal.isOpen && createPortal(
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-gray-200 dark:border-zinc-800 w-full max-w-2xl max-h-[80vh] flex flex-col overflow-hidden text-gray-900 dark:text-white">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/20">
+                    <div>
+                        <span className="text-[10px] uppercase font-bold text-primary tracking-widest block mb-0.5">Full Job Description</span>
+                        <h3 className="text-lg font-extrabold text-gray-900 dark:text-white leading-tight">{fullJdModal.title}</h3>
+                    </div>
+                    <button 
+                        onClick={() => setFullJdModal(null)} 
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        title="Close full screen Job Description view"
+                    >
+                        <i className="fas fa-times text-lg"></i>
+                    </button>
+                </div>
+                {/* Body */}
+                <div className="p-6 overflow-y-auto custom-card-scrollbar text-sm text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-wrap">
+                    {fullJdModal.description || "No description provided."}
+                </div>
+                {/* Footer */}
+                <div className="flex justify-end p-4 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/20">
+                    <button 
+                        onClick={() => setFullJdModal(null)} 
+                        className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-sm"
+                        title="Close window"
+                    >
+                        Close View
+                    </button>
+                </div>
+            </div>
+        </div>,
+        document.body
+    )}
+
+    {fullRosterModal && fullRosterModal.isOpen && (() => {
+        const interview = fullRosterModal.interview;
+        return createPortal(
+            <FullRosterModalContent 
+                interview={interview} 
+                submissionsMap={submissionsMap} 
+                setWhatsappModal={(modal) => setWhatsappModal({ ...modal, isOpen: true })} 
+                onClose={() => setFullRosterModal(null)} 
+            />,
+            document.body
+        );
+    })()}
     </div>
+    );
+};
+
+interface FullRosterModalContentProps {
+    interview: Interview;
+    submissionsMap: Record<string, any[]>;
+    setWhatsappModal: (modal: any) => void;
+    onClose: () => void;
+}
+
+const FullRosterModalContent: React.FC<FullRosterModalContentProps> = ({ interview, submissionsMap, setWhatsappModal, onClose }) => {
+    const [rosterSearch, setRosterSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('All');
+
+    const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
+    const submissions = submissionsMap[interview.id] || [];
+    const unifiedList: {email: string, hasSubmitted: boolean}[] = [];
+    
+    submissions.forEach(sub => {
+        unifiedList.push({ email: sub.candidateInfo?.email || 'N/A', hasSubmitted: true });
+    });
+
+    explicitEmails.forEach(email => {
+        const hasSubmitted = submissions.some(sub => (sub.candidateInfo?.email || '').toLowerCase() === email);
+        if (!hasSubmitted && !unifiedList.some(u => u.email.toLowerCase() === email)) {
+            unifiedList.push({ email, hasSubmitted: false });
+        }
+    });
+
+    const filteredList = unifiedList.filter(cand => {
+        const matchesSearch = cand.email.toLowerCase().includes(rosterSearch.toLowerCase());
+        const matchesStatus = statusFilter === 'All' || 
+            (statusFilter === 'Submitted' && cand.hasSubmitted) ||
+            (statusFilter === 'Pending' && !cand.hasSubmitted);
+        return matchesSearch && matchesStatus;
+    });
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-zinc-950 rounded-2xl shadow-2xl border border-gray-200 dark:border-zinc-800 w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden text-gray-900 dark:text-white">
+                {/* Header */}
+                <div className="flex items-center justify-between p-5 border-b border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/20">
+                    <div>
+                        <span className="text-[10px] uppercase font-bold text-primary tracking-widest block mb-0.5">Tracking Roster</span>
+                        <h3 className="text-lg font-extrabold text-gray-900 dark:text-white leading-tight">{interview.title}</h3>
+                    </div>
+                    <button 
+                        onClick={onClose} 
+                        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        title="Close candidate roster view"
+                    >
+                        <i className="fas fa-times text-lg"></i>
+                    </button>
+                </div>
+                
+                {/* Search and Filters inside Roster */}
+                <div className="p-4 bg-gray-50/50 dark:bg-zinc-900/10 border-b border-gray-100 dark:border-zinc-800 flex flex-col sm:flex-row gap-3">
+                    <div className="relative flex-1">
+                        <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 pointer-events-none">
+                            <i className="fas fa-search text-xs"></i>
+                        </span>
+                        <input
+                            type="text"
+                            value={rosterSearch}
+                            onChange={(e) => setRosterSearch(e.target.value)}
+                            placeholder="Search candidate email..."
+                            className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-950 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary transition-all"
+                            title="Filter roster list by typing candidate email"
+                        />
+                    </div>
+                    <select
+                        value={statusFilter}
+                        onChange={(e) => setStatusFilter(e.target.value)}
+                        className="px-3 py-2 border border-gray-200 dark:border-zinc-800 rounded-xl bg-white dark:bg-zinc-950 text-xs font-semibold outline-none focus:ring-1 focus:ring-primary"
+                        title="Filter candidates by status"
+                    >
+                        <option value="All">All Status</option>
+                        <option value="Submitted">Submitted</option>
+                        <option value="Pending">Pending</option>
+                    </select>
+                </div>
+
+                {/* Body */}
+                <div className="p-5 overflow-y-auto custom-card-scrollbar flex-grow space-y-2.5 max-h-[50vh]">
+                    {filteredList.length === 0 ? (
+                        <p className="text-xs text-gray-500 italic text-center py-8">No matching candidates found.</p>
+                    ) : (
+                        filteredList.map((cand, idx) => (
+                            <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-zinc-900/40 text-xs rounded-xl px-4 py-3 border border-gray-100 dark:border-zinc-800">
+                                <span className="font-semibold text-gray-700 dark:text-gray-200 truncate max-w-[240px] sm:max-w-[320px]" title={cand.email}>
+                                    {cand.email}
+                                </span>
+                                {cand.hasSubmitted ? (
+                                    <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1.5 shrink-0">
+                                        <i className="fas fa-check-circle"></i> Submitted
+                                    </span>
+                                ) : (
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <span className="text-yellow-600 dark:text-yellow-500 font-bold flex items-center gap-1.5">
+                                            <i className="fas fa-clock"></i> Pending
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const candData = (interview as any).candidateData?.find((c: any) => c.email?.toLowerCase() === cand.email?.toLowerCase());
+                                                const phone = candData?.phone || '';
+                                                const link = `${window.location.origin}/#/interview/${interview.id}`;
+                                                const msg = `👋 Hi there!\n\nWe're actively hiring for the *${interview.title}* role and we'd love to invite you to take our AI-powered interview to fast-track your application! 🌟\n\n🚀 *Start your interview here:* \n${link}\n\n🔑 *Your Access Code:* \n${interview.accessCode}\n\nIt only takes a few minutes and you can complete it whenever you're ready. Best of luck! 🎉`;
+                                                setWhatsappModal({
+                                                    isOpen: true,
+                                                    email: cand.email,
+                                                    phone: phone === 'N/A' ? '' : phone,
+                                                    message: msg,
+                                                    interview: interview
+                                                });
+                                                onClose(); // Close roster modal when opening WhatsApp modal
+                                            }}
+                                            className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 rounded-lg text-[10px] font-extrabold transition-all"
+                                            title="Click to launch WhatsApp Web wizard"
+                                        >
+                                            <i className="fab fa-whatsapp"></i>
+                                            <span>Invite via WhatsApp</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        ))
+                    )}
+                </div>
+
+                {/* Footer */}
+                <div className="flex justify-end p-4 border-t border-gray-100 dark:border-zinc-800 bg-gray-50/50 dark:bg-zinc-900/20">
+                    <button 
+                        onClick={onClose} 
+                        className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 rounded-xl transition-all shadow-sm"
+                        title="Close window"
+                    >
+                        Close View
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 };
 
