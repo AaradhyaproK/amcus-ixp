@@ -3,6 +3,7 @@ import { collection, query, where, getDocs, updateDoc, doc, arrayUnion } from 'f
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
+import { createPortal } from 'react-dom';
 import * as pdfjsLib from 'pdfjs-dist';
 import { useMessageBox } from '../components/MessageBox';
 import { Interview, InterviewSubmission } from '../types';
@@ -44,6 +45,36 @@ const InvitedCandidates: React.FC = () => {
     const [jobSearchTerm, setJobSearchTerm] = useState('');
     
     const messageBox = useMessageBox();
+    const [whatsappModal, setWhatsappModal] = useState<{
+        isOpen: boolean;
+        email: string;
+        phone: string;
+        message: string;
+        interview: Interview;
+    } | null>(null);
+
+    const handleResendFromHub = async (email: string, interviewId: string) => {
+        const selectedInterview = interviews.find(i => i.id === interviewId);
+        if (!selectedInterview) return;
+        
+        try {
+            const result = await sendInterviewInvitations(
+                [email],
+                selectedInterview.title,
+                selectedInterview.interviewLink || '',
+                selectedInterview.accessCode
+            );
+
+            if (result.success) {
+                messageBox.showSuccess(`Invitation resent to ${email}!`);
+            } else {
+                messageBox.showError(`Failed to resend email: ${result.error}`);
+            }
+        } catch (error: any) {
+            console.error('Resend error:', error);
+            messageBox.showError('Failed to resend invitation.');
+        }
+    };
 
     useEffect(() => {
         if (!user) return;
@@ -523,7 +554,34 @@ const InvitedCandidates: React.FC = () => {
                                                 {candidate.hasSubmitted ? (
                                                      <Link to={`/report/${candidate.interviewId}/${candidate.submissionId}`} target="_blank" className="text-primary hover:text-primary-dark font-medium text-xs bg-primary/10 px-3 py-1.5 rounded-lg transition-colors">View Report</Link>
                                                 ) : (
-                                                     <button className="text-gray-400 hover:text-blue-500 transition-colors" title="Re-send Invitation"><i className="fas fa-redo-alt"></i></button>
+                                                     <div className="flex justify-end items-center gap-3">
+                                                         <button 
+                                                             onClick={() => {
+                                                                 const selectedInterview = interviews.find(i => i.id === candidate.interviewId);
+                                                                 if (!selectedInterview) return;
+                                                                 const link = `${window.location.origin}/#/interview/${selectedInterview.id}`;
+                                                                 const msg = `👋 Hi there!\n\nWe're actively hiring for the *${selectedInterview.title}* role and we'd love to invite you to take our AI-powered interview to fast-track your application! 🌟\n\n🚀 *Start your interview here:* \n${link}\n\n🔑 *Your Access Code:* \n${selectedInterview.accessCode}\n\nIt only takes a few minutes and you can complete it whenever you're ready. Best of luck! 🎉`;
+                                                                 setWhatsappModal({
+                                                                     isOpen: true,
+                                                                     email: candidate.email,
+                                                                     phone: candidate.phone === 'N/A' ? '' : candidate.phone,
+                                                                     message: msg,
+                                                                     interview: selectedInterview
+                                                                 });
+                                                             }}
+                                                             className="text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 dark:hover:text-emerald-300 transition-colors" 
+                                                             title="Invite via WhatsApp Web"
+                                                         >
+                                                             <i className="fab fa-whatsapp text-base"></i>
+                                                         </button>
+                                                         <button 
+                                                             onClick={() => handleResendFromHub(candidate.email, candidate.interviewId)}
+                                                             className="text-gray-400 hover:text-blue-500 transition-colors" 
+                                                             title="Re-send Email Invitation"
+                                                         >
+                                                             <i className="fas fa-redo-alt"></i>
+                                                         </button>
+                                                     </div>
                                                 )}
                                             </td>
                                         </tr>
@@ -541,6 +599,137 @@ const InvitedCandidates: React.FC = () => {
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Select an Interview Route</h3>
                     <p className="text-gray-500 dark:text-gray-400 max-w-md mx-auto">Please select a specific interview from the dropdown above to view the associated candidates, track their progress, and export their reports.</p>
                 </div>
+            )}
+
+            {whatsappModal && whatsappModal.isOpen && createPortal(
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[9999] p-4 animate-in fade-in duration-200">
+                    <div className="bg-white dark:bg-zinc-900 rounded-2xl shadow-xl w-full max-w-lg overflow-hidden border border-gray-200 dark:border-white/10 flex flex-col text-gray-900 dark:text-white transform transition-all duration-300">
+                        {/* Header */}
+                        <div className="flex items-center gap-3 p-4 bg-emerald-500/10 dark:bg-emerald-500/5 border-b border-emerald-500/20 dark:border-emerald-500/10">
+                            <div className="p-2 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                                <i className="fab fa-whatsapp text-xl"></i>
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-gray-900 dark:text-white">Send WhatsApp Invite</h3>
+                                <p className="text-xs text-gray-500 dark:text-gray-400">Send an invitation link to the candidate via WhatsApp Web</p>
+                            </div>
+                            <button 
+                                onClick={() => setWhatsappModal(null)} 
+                                className="p-1 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                            >
+                                <i className="fas fa-times text-lg"></i>
+                            </button>
+                        </div>
+
+                        {/* Body */}
+                        <div className="p-5 space-y-4 overflow-y-auto max-h-[70vh]">
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Candidate Email</label>
+                                <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 bg-gray-50 dark:bg-black/30 p-2.5 rounded-lg border border-gray-200 dark:border-zinc-800">
+                                    {whatsappModal.email}
+                                </div>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Phone Number <span className="text-red-500">*</span></label>
+                                <div className="relative">
+                                    <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 font-medium text-sm">
+                                        <i className="fas fa-phone-alt mr-1"></i>
+                                    </span>
+                                    <input 
+                                        type="tel" 
+                                        value={whatsappModal.phone} 
+                                        onChange={(e) => setWhatsappModal({...whatsappModal, phone: e.target.value})} 
+                                        placeholder="Enter phone number (e.g. 9876543210)" 
+                                        className="w-full pl-9 pr-4 py-2.5 border border-gray-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white dark:bg-zinc-800 text-sm outline-none"
+                                    />
+                                </div>
+                                <p className="text-[10px] text-gray-400 mt-1">Include country code if outside India. 10-digit Indian numbers auto-prepend +91.</p>
+                            </div>
+
+                            <div>
+                                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Draft Message Preview</label>
+                                <textarea 
+                                    value={whatsappModal.message} 
+                                    onChange={(e) => setWhatsappModal({...whatsappModal, message: e.target.value})} 
+                                    rows={6}
+                                    className="w-full p-3 border border-gray-200 dark:border-zinc-800 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-white dark:bg-zinc-800 text-xs font-mono outline-none leading-relaxed resize-none"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="flex justify-end gap-2 p-4 bg-gray-50 dark:bg-white/5 border-t border-gray-100 dark:border-white/5">
+                            <button 
+                                onClick={() => setWhatsappModal(null)} 
+                                className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button 
+                                onClick={async () => {
+                                    if (!whatsappModal.phone.trim()) {
+                                        messageBox.showError("Please enter a valid phone number");
+                                        return;
+                                    }
+                                    
+                                    // Save phone to Firestore under candidateData array
+                                    try {
+                                        const intRef = doc(db, 'interviews', whatsappModal.interview.id);
+                                        const currentCandData = (whatsappModal.interview as any).candidateData || [];
+                                        const index = currentCandData.findIndex((c: any) => c.email.toLowerCase() === whatsappModal.email.toLowerCase());
+                                        
+                                        let updatedCandData = [...currentCandData];
+                                        if (index > -1) {
+                                            updatedCandData[index] = { ...updatedCandData[index], phone: whatsappModal.phone };
+                                        } else {
+                                            updatedCandData.push({ email: whatsappModal.email, phone: whatsappModal.phone });
+                                        }
+                                        
+                                        await updateDoc(intRef, {
+                                            candidateData: updatedCandData
+                                        });
+                                        
+                                        // Update local interviews state
+                                        setInterviews(prev => prev.map(inv => {
+                                            if (inv.id === whatsappModal.interview.id) {
+                                                return { ...inv, candidateData: updatedCandData };
+                                            }
+                                            return inv;
+                                        }));
+
+                                        // Update local globalCandidates list
+                                        setGlobalCandidates(prev => prev.map(c => {
+                                            if (c.email.toLowerCase() === whatsappModal.email.toLowerCase() && c.interviewId === whatsappModal.interview.id) {
+                                                return { ...c, phone: whatsappModal.phone };
+                                            }
+                                            return c;
+                                        }));
+                                    } catch (err) {
+                                        console.error("Error updating phone in Firestore:", err);
+                                    }
+                                    
+                                    // Open WhatsApp web
+                                    const cleanedPhone = whatsappModal.phone.replace(/[^0-9]/g, '');
+                                    let targetPhone = cleanedPhone;
+                                    if (cleanedPhone.length === 10) {
+                                        targetPhone = '91' + cleanedPhone;
+                                    }
+                                    
+                                    const waUrl = `https://web.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(whatsappModal.message)}`;
+                                    window.open(waUrl, '_blank');
+                                    setWhatsappModal(null);
+                                    messageBox.showSuccess("Redirecting to WhatsApp Web...");
+                                }}
+                                className="px-5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
+                            >
+                                <i className="fab fa-whatsapp"></i>
+                                <span>Send WhatsApp Invite</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>,
+                document.body
             )}
         </div>
     );
