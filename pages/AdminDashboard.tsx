@@ -1,13 +1,13 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
-import { collection, query, where, doc, deleteDoc, setDoc, serverTimestamp, updateDoc, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, doc, deleteDoc, setDoc, serverTimestamp, updateDoc, orderBy, onSnapshot, collectionGroup } from 'firebase/firestore';
 import { initializeApp, deleteApp } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { db, auth } from '../services/firebase';
 import { RevenueAreaChart, UserPieChart, JobBarChart } from '../components/AdminCharts';
 import { GShapeAnimation } from '../components/AdminAnimations';
-import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity, Database, Key, Globe, Copy, Check, Code } from 'lucide-react';
+import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity, Database, Key, Globe, Copy, Check, Code, Server, TrendingUp } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useMessageBox } from '../components/MessageBox';
 import Logo from '../components/Logo';
@@ -24,9 +24,15 @@ const AdminDashboard: React.FC = () => {
   const [allReviews, setAllReviews] = useState<any[]>([]);
   const [adminData, setAdminData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [allAttempts, setAllAttempts] = useState<any[]>([]);
+  const [perInterviewPrice, setPerInterviewPrice] = useState<number>(() => {
+    const saved = localStorage.getItem('perInterviewPrice');
+    return saved ? Number(saved) : 150;
+  });
 
   // UI State
-  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'jobs' | 'transactions' | 'submissions' | 'reviews' | 'api'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'jobs' | 'transactions' | 'submissions' | 'reviews' | 'api' | 'dbAccess'>('overview');
+  const [dbSubTab, setDbSubTab] = useState<'submissions' | 'interviews' | 'users'>('submissions');
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'candidate' | 'recruiter'>('all');
@@ -65,8 +71,8 @@ const AdminDashboard: React.FC = () => {
       setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
-    // 3. Jobs
-    const qJobs = query(collection(db, 'jobs'), orderBy('createdAt', 'desc'));
+    // 3. Posted Interviews (fetched instead of legacy jobs)
+    const qJobs = query(collection(db, 'interviews'), orderBy('createdAt', 'desc'));
     const unsubJobs = onSnapshot(qJobs, (snap) => {
       setJobs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
@@ -78,7 +84,7 @@ const AdminDashboard: React.FC = () => {
     });
 
     // 5. Interviews - Real-time tracking
-    const qInterviews = query(collection(db, 'interviews'), orderBy('submittedAt', 'desc'));
+    const qInterviews = query(collection(db, 'interviews'), orderBy('createdAt', 'desc'));
     const unsubInterviews = onSnapshot(qInterviews, (snap) => {
       setInterviews(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false); // Initial load done when interviews load
@@ -125,6 +131,46 @@ const AdminDashboard: React.FC = () => {
       unsubReviews();
     };
   }, []);
+
+  // Live tracking of all attempts across all recruiter interviews
+  useEffect(() => {
+    if (interviews.length === 0) return;
+
+    const unsubs: (() => void)[] = [];
+    const attemptsMap = new Map<string, any[]>();
+
+    interviews.forEach(interview => {
+      const q = collection(db, 'interviews', interview.id, 'attempts');
+      const unsub = onSnapshot(q, (snap) => {
+        const list = snap.docs.map(doc => ({
+          id: doc.id,
+          interviewId: interview.id,
+          ...doc.data()
+        }));
+        attemptsMap.set(interview.id, list);
+
+        // Merge all lists and update state
+        const all: any[] = [];
+        attemptsMap.forEach(attemptsList => {
+          all.push(...attemptsList);
+        });
+        // Sort by submittedAt desc
+        all.sort((a, b) => {
+          const timeA = a.submittedAt?.seconds || 0;
+          const timeB = b.submittedAt?.seconds || 0;
+          return timeB - timeA;
+        });
+        setAllAttempts(all);
+      }, (err) => {
+        console.error(`Error loading attempts for interview ${interview.id}:`, err);
+      });
+      unsubs.push(unsub);
+    });
+
+    return () => {
+      unsubs.forEach(unsub => unsub());
+    };
+  }, [interviews]);
 
   // GSAP Initial Page Animation
   useLayoutEffect(() => {
@@ -407,7 +453,7 @@ const AdminDashboard: React.FC = () => {
     switch (activeTab) {
       case 'requests': return requests.filter(r => r.fullname?.toLowerCase().includes(term) || r.email?.toLowerCase().includes(term));
       case 'users': return users.filter(u => (u.fullname?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term)) && (userFilter === 'all' || u.role === userFilter));
-      case 'jobs': return jobs.filter(j => j.title?.toLowerCase().includes(term) || j.companyName?.toLowerCase().includes(term));
+      case 'jobs': return jobs.filter(j => j.title?.toLowerCase().includes(term) || (j.department || j.category || '').toLowerCase().includes(term));
       case 'transactions': return transactions.filter(t => t.userName?.toLowerCase().includes(term) || t.paymentId?.toLowerCase().includes(term));
       case 'submissions':
         const filteredContacts = contactSubmissions.filter(c => c.status !== 'read' && (c.name?.toLowerCase().includes(term) || c.email?.toLowerCase().includes(term) || c.subject?.toLowerCase().includes(term) || c.phone?.includes(term)));
@@ -415,10 +461,141 @@ const AdminDashboard: React.FC = () => {
         return { contacts: filteredContacts, bugs: filteredBugs };
       case 'reviews':
         return allReviews.filter(r => r.name?.toLowerCase().includes(term) || r.email?.toLowerCase().includes(term) || r.review?.toLowerCase().includes(term));
+      case 'dbAccess':
+        if (dbSubTab === 'users') {
+          return users.filter(u => u.fullname?.toLowerCase().includes(term) || u.email?.toLowerCase().includes(term) || u.role?.toLowerCase().includes(term));
+        } else if (dbSubTab === 'interviews') {
+          return jobs.filter(j => j.title?.toLowerCase().includes(term) || (j.department || j.category || '').toLowerCase().includes(term) || j.accessCode?.toLowerCase().includes(term));
+        } else {
+          return allAttempts.filter(a => a.candidateInfo?.name?.toLowerCase().includes(term) || a.candidateInfo?.email?.toLowerCase().includes(term) || a.candidateInfo?.phone?.includes(term));
+        }
       default: return [];
     }
   };
   const submissionsData = activeTab === 'submissions' ? filteredData() as { contacts: any[], bugs: any[] } : { contacts: [], bugs: [] };
+
+  // --- Dynamic Pricing Calculations ---
+  const handlePriceChange = (val: number) => {
+    setPerInterviewPrice(val);
+    localStorage.setItem('perInterviewPrice', val.toString());
+  };
+
+  const totalEarnings = allAttempts.length * perInterviewPrice;
+
+  const thisMonthEarnings = React.useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    
+    const attemptsThisMonth = allAttempts.filter(a => {
+      if (!a.submittedAt?.toDate) return false;
+      return a.submittedAt.toDate() >= startOfMonth;
+    });
+    
+    return attemptsThisMonth.length * perInterviewPrice;
+  }, [allAttempts, perInterviewPrice]);
+
+  const thisMonthSubmissionsCount = React.useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const attemptsThisMonth = allAttempts.filter(a => {
+      if (!a.submittedAt?.toDate) return false;
+      return a.submittedAt.toDate() >= startOfMonth;
+    });
+    return attemptsThisMonth.length;
+  }, [allAttempts]);
+
+  const thisMonthInterviewsCount = React.useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const interviewsThisMonth = jobs.filter(j => {
+      if (!j.createdAt?.toDate) return false;
+      return j.createdAt.toDate() >= startOfMonth;
+    });
+    return interviewsThisMonth.length;
+  }, [jobs]);
+
+  // --- DB Access Export Functions ---
+  const getInterviewTitle = (id: string) => {
+    const matching = jobs.find(j => j.id === id);
+    return matching ? matching.title : `Interview ID: ${id}`;
+  };
+
+  const exportUsersCSV = () => {
+    const headers = ["User ID", "Full Name", "Email", "Role", "Account Status", "Created At"];
+    const rows = users.map(u => [
+      `"${u.id}"`,
+      `"${(u.fullname || u.name || "N/A").replace(/"/g, '""')}"`,
+      `"${(u.email || "N/A").replace(/"/g, '""')}"`,
+      `"${u.role || "candidate"}"`,
+      `"${u.accountStatus || "active"}"`,
+      `"${u.createdAt?.toDate ? u.createdAt.toDate().toLocaleString() : 'N/A'}"`
+    ]);
+    downloadCSV("DB_Users_Export.csv", [headers.join(","), ...rows.map(r => r.join(","))].join("\n"));
+  };
+
+  const exportInterviewsCSV = () => {
+    const headers = ["Interview ID", "Title", "Department", "Required Experience (Years)", "Difficulty", "Access Code", "Created At"];
+    const rows = jobs.map(j => [
+      `"${j.id}"`,
+      `"${(j.title || "Untitled").replace(/"/g, '""')}"`,
+      `"${(j.department || j.category || "N/A").replace(/"/g, '""')}"`,
+      `"${j.minExperience}-${j.maxExperience} years"`,
+      `"${j.difficulty || "Medium"}"`,
+      `"${j.accessCode || "N/A"}"`,
+      `"${j.createdAt?.toDate ? j.createdAt.toDate().toLocaleString() : 'N/A'}"`
+    ]);
+    downloadCSV("DB_Interviews_Export.csv", [headers.join(","), ...rows.map(r => r.join(","))].join("\n"));
+  };
+
+  const exportAttemptsCSV = () => {
+    const headers = ["Attempt ID", "Candidate Name", "Email", "Contact", "Applied Role / Interview", "Overall Score", "Resume Score", "Q&A Score", "Completion Status", "Submitted Date", "Resume URL", "Report URL"];
+    const rows = allAttempts.map(a => [
+      `"${a.id}"`,
+      `"${(a.candidateInfo?.name || "N/A").replace(/"/g, '""')}"`,
+      `"${(a.candidateInfo?.email || "N/A").replace(/"/g, '""')}"`,
+      `"${(a.candidateInfo?.phone || "N/A").replace(/"/g, '""')}"`,
+      `"${getInterviewTitle(a.interviewId).replace(/"/g, '""')}"`,
+      `"${a.score || "N/A"}"`,
+      `"${a.resumeScore || "N/A"}"`,
+      `"${a.qnaScore || "N/A"}"`,
+      `"${a.status || "Completed"}"`,
+      `"${a.submittedAt?.toDate ? a.submittedAt.toDate().toLocaleString() : 'N/A'}"`,
+      `"${(a.candidateResumeURL || "N/A").replace(/"/g, '""')}"`,
+      `"${window.location.origin}/#/report/${a.interviewId}/${a.id}"`
+    ]);
+    downloadCSV("DB_Candidate_Submissions_Export.csv", [headers.join(","), ...rows.map(r => r.join(","))].join("\n"));
+  };
+
+  const exportFullDBJSON = () => {
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      platform: "InterviewXpert",
+      collections: {
+        users: users.map(u => ({ ...u, createdAt: u.createdAt?.toDate ? u.createdAt.toDate() : null })),
+        interviews: jobs.map(j => ({ ...j, createdAt: j.createdAt?.toDate ? j.createdAt.toDate() : null })),
+        submissions: allAttempts.map(a => ({ ...a, submittedAt: a.submittedAt?.toDate ? a.submittedAt.toDate() : null }))
+      }
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `InterviewXpert_Master_DB_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const downloadCSV = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // --- Render ---
 
@@ -554,10 +731,11 @@ const AdminDashboard: React.FC = () => {
               { id: 'overview', label: 'Overview', icon: Briefcase },
               { id: 'requests', label: 'Requests', icon: UserPlus, count: requests.length },
               { id: 'users', label: 'Users', icon: Users, count: users.length },
-              { id: 'jobs', label: 'Jobs', icon: FileText, count: jobs.length },
+              { id: 'jobs', label: 'Interviews', icon: FileText, count: jobs.length },
               { id: 'transactions', label: 'Transactions', icon: DollarSign },
               { id: 'reviews', label: 'Reviews', icon: Star, count: allReviews.filter(r => !r.approved).length },
               { id: 'submissions', label: 'Inbox', icon: MessageSquareIcon, count: contactSubmissions.length + bugReports.length },
+              { id: 'dbAccess', label: 'DB Access', icon: Server },
               { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
               { id: 'stats', label: 'Platform Stats', icon: Activity },
               { id: 'api', label: 'API & Integrations', icon: Database }
@@ -595,10 +773,11 @@ const AdminDashboard: React.FC = () => {
             { id: 'overview', label: 'Overview', icon: Briefcase },
             { id: 'requests', label: 'Requests', icon: UserPlus, count: requests.length },
             { id: 'users', label: 'Users', icon: Users, count: users.length },
-            { id: 'jobs', label: 'Jobs', icon: FileText, count: jobs.length },
+            { id: 'jobs', label: 'Interviews', icon: FileText, count: jobs.length },
             { id: 'transactions', label: 'Transactions', icon: DollarSign },
             { id: 'reviews', label: 'Reviews', icon: Star, count: allReviews.filter(r => !r.approved).length },
             { id: 'submissions', label: 'Inbox', icon: MessageSquareIcon, count: contactSubmissions.length + bugReports.length },
+            { id: 'dbAccess', label: 'DB Access', icon: Server },
             { id: 'blogs', label: 'Manage Blogs', icon: BookOpen },
             { id: 'stats', label: 'Platform Stats', icon: Activity },
             { id: 'api', label: 'API & Integrations', icon: Database }
@@ -632,13 +811,161 @@ const AdminDashboard: React.FC = () => {
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">
 
           {activeTab === 'overview' && (
-            <div className="space-y-4 sm:space-y-6">
-              {/* Stats Grid */}
-              <div ref={statsRef} className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <StatCard title="Total Revenue" value={`₹${totalRevenue.toLocaleString()}`} change={`${Number(todayStats.revenueChangePercent) >= 0 ? '+' : ''}${todayStats.revenueChangePercent}%`} icon={DollarSign} color="text-green-500" className="stat-card" />
-                <StatCard title="Total Users" value={users.length} change={`+${todayStats.newUsersToday} Today`} icon={Users} color="text-blue-500" className="stat-card" />
-                <StatCard title="Job Posts" value={jobs.length} change={`+${todayStats.jobsToday} Today`} icon={FileText} color="text-purple-500" className="stat-card" />
-                <StatCard title="Interviews" value={interviews.length} change={`+${todayStats.interviewsToday} Today`} icon={Video} color="text-orange-500" className="stat-card" />
+            <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
+              {/* Dynamic Price Config Bar */}
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 rounded-2xl gap-4 shadow-sm">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-primary/10 text-primary rounded-xl shrink-0">
+                    <DollarSign className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-gray-900 dark:text-white font-sans">Earnings Configuration</h3>
+                    <p className="text-xs text-gray-500 font-sans">Specify pricing to multiply responses & calculate earnings</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2 w-full sm:w-auto">
+                  <span className="text-xs font-semibold text-gray-500 whitespace-nowrap font-sans">Per Interview Price:</span>
+                  <div className="relative flex-1 sm:w-40">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">₹</span>
+                    <input
+                      type="number"
+                      value={perInterviewPrice}
+                      onChange={(e) => handlePriceChange(Number(e.target.value))}
+                      className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-right font-sans"
+                      placeholder="Price"
+                      min="0"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Stats Rows */}
+              <div ref={statsRef} className="space-y-6 sm:space-y-8">
+                
+                {/* Row 1: Revenue & Financials */}
+                <div className="p-5 sm:p-6 rounded-3xl border border-emerald-500/10 bg-emerald-50/10 dark:bg-emerald-950/5 space-y-4">
+                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                    <TrendingUp className="w-5 h-5 animate-pulse" />
+                    <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Financial Performance Dashboard</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Total Platform Revenue</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">₹{totalEarnings.toLocaleString()}</h3>
+                        </div>
+                        <div className="p-3 bg-emerald-500/10 text-emerald-600 rounded-2xl group-hover:scale-110 transition-transform">
+                          <DollarSign className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-emerald-600">
+                        <span className="px-2 py-0.5 bg-emerald-500/10 rounded">{allAttempts.length} paid responses</span>
+                        <span>all time earning</span>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">This Month Earning</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">₹{thisMonthEarnings.toLocaleString()}</h3>
+                        </div>
+                        <div className="p-3 bg-teal-500/10 text-teal-600 rounded-2xl group-hover:scale-110 transition-transform">
+                          <DollarSign className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-teal-600">
+                        <span className="px-2 py-0.5 bg-teal-500/10 rounded">{thisMonthSubmissionsCount} paid responses</span>
+                        <span>current calendar month</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 2: Submissions & Candidates */}
+                <div className="p-5 sm:p-6 rounded-3xl border border-blue-500/10 bg-blue-50/10 dark:bg-blue-950/5 space-y-4">
+                  <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                    <Users className="w-5 h-5 animate-pulse" />
+                    <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Candidate Response Analytics</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Total Completed Responses</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">{allAttempts.length}</h3>
+                        </div>
+                        <div className="p-3 bg-blue-500/10 text-blue-600 rounded-2xl group-hover:scale-110 transition-transform">
+                          <FileText className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-blue-600">
+                        <span className="px-2 py-0.5 bg-blue-500/10 rounded">All-Time Candidates</span>
+                        <span>evaluated via AI</span>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">This Month Responses</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">{thisMonthSubmissionsCount}</h3>
+                        </div>
+                        <div className="p-3 bg-purple/10 text-purple rounded-2xl group-hover:scale-110 transition-transform">
+                          <CheckCircle className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-purple">
+                        <span className="px-2 py-0.5 bg-purple/10 rounded">Completed This Month</span>
+                        <span>evaluation cycle</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Row 3: Recruiter campaigns */}
+                <div className="p-5 sm:p-6 rounded-3xl border border-orange-500/10 bg-orange-50/10 dark:bg-orange-950/5 space-y-4">
+                  <div className="flex items-center gap-2 text-orange-600 dark:text-orange-400">
+                    <Video className="w-5 h-5 animate-pulse" />
+                    <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Recruiter Campaign Activity</span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Total Posted Campaigns</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">{jobs.length}</h3>
+                        </div>
+                        <div className="p-3 bg-orange-500/10 text-orange-600 rounded-2xl group-hover:scale-110 transition-transform">
+                          <Video className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-orange-600">
+                        <span className="px-2 py-0.5 bg-orange-500/10 rounded">All-Time Posted</span>
+                        <span>interviews by recruiters</span>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Posted This Month</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">{thisMonthInterviewsCount}</h3>
+                        </div>
+                        <div className="p-3 bg-pink-500/10 text-pink-600 rounded-2xl group-hover:scale-110 transition-transform">
+                          <Video className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-pink-600">
+                        <span className="px-2 py-0.5 bg-pink-500/10 rounded">Active Campaigns</span>
+                        <span>launched in current cycle</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
               </div>
 
               {/* Charts Row 1 */}
@@ -835,13 +1162,13 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'jobs' && (
             <div className="space-y-4 sm:space-y-6">
               <div className="animated-item flex flex-col gap-3">
-                <h2 className="text-xl sm:text-2xl font-bold">Job Postings</h2>
+                <h2 className="text-xl sm:text-2xl font-bold">Posted Interviews</h2>
                 {/* Search Input */}
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                   <input
                     type="text"
-                    placeholder="Search by job title or company..."
+                    placeholder="Search by interview title or department..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
@@ -850,15 +1177,34 @@ const AdminDashboard: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
                 {filteredData().map(job => (
-                  <div key={job.id} className="animated-item p-4 sm:p-5 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm hover:border-primary/50 transition-all group relative">
+                  <div key={job.id} className="animated-item p-4 sm:p-5 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm hover:border-primary/50 transition-all group relative flex flex-col">
                     <div className="flex justify-between items-start mb-2 gap-2">
                       <h3 className="font-bold text-base sm:text-lg truncate" title={job.title}>{job.title}</h3>
                       <button onClick={() => handleDeleteJob(job.id)} className="shrink-0 text-gray-400 hover:text-red-500 transition-colors bg-gray-100 dark:bg-white/5 p-1.5 rounded-lg"><Trash2 size={14} /></button>
                     </div>
-                    <p className="text-gray-500 text-xs sm:text-sm mb-3 sm:mb-4 truncate">{job.companyName}</p>
-                    <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-400 mt-auto">
+                    <p className="text-gray-500 text-xs sm:text-sm mb-3 truncate">{job.department || job.employmentType || 'Recruiter Posted'}</p>
+                    
+                    <div className="flex flex-wrap gap-1.5 mb-4">
+                      {job.accessCode && (
+                        <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/20 text-blue-600 rounded text-xs font-mono">
+                          Code: {job.accessCode}
+                        </span>
+                      )}
+                      {job.difficulty && (
+                        <span className="px-2 py-0.5 bg-purple/10 text-purple rounded text-xs font-medium">
+                          {job.difficulty}
+                        </span>
+                      )}
+                      {(job.minExperience !== undefined || job.maxExperience !== undefined) && (
+                        <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/20 text-amber-600 rounded text-xs font-medium">
+                          {job.minExperience}-{job.maxExperience} Yrs
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-400 mt-auto pt-2 border-t border-gray-100 dark:border-white/5">
                       <span>{job.createdAt?.toDate ? job.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
-                      <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 dark:bg-green-900/20 text-green-600 rounded-md">Active</span>
+                      <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 dark:bg-green-900/20 text-green-600 rounded-md font-semibold">Active</span>
                     </div>
                   </div>
                 ))}
@@ -1269,6 +1615,239 @@ def push_job_description():
 push_job_description()`
                   )}
                 </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'dbAccess' && (
+            <div className="space-y-6 sm:space-y-8 animate-in fade-in duration-300">
+              <div className="flex flex-col gap-2">
+                <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                  <Database className="text-primary w-6 h-6 sm:w-7 sm:h-7" />
+                  Database Access & Consolidated Exporter
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  Access live data tables directly, view candidates, posted recruiter interviews, and perform consolidated spreadsheet exports.
+                </p>
+              </div>
+
+              {/* Data Exporter Dashboard */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <button
+                  onClick={exportAttemptsCSV}
+                  className="flex flex-col items-start text-left p-4 sm:p-5 rounded-2xl border border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-950/10 hover:bg-emerald-50/50 dark:hover:bg-emerald-950/20 transition-all hover:scale-[1.01] group shadow-sm"
+                >
+                  <div className="p-2 bg-emerald-500/10 text-emerald-600 rounded-xl mb-3 group-hover:scale-105 transition-transform"><FileText size={20} /></div>
+                  <span className="font-bold text-sm text-gray-900 dark:text-white">Export Responses CSV</span>
+                  <span className="text-xs text-gray-500 mt-1">Export all {allAttempts.length} candidate attempts, emails, contacts, scores, and resume links.</span>
+                </button>
+
+                <button
+                  onClick={exportInterviewsCSV}
+                  className="flex flex-col items-start text-left p-4 sm:p-5 rounded-2xl border border-indigo-500/20 bg-indigo-50/30 dark:bg-indigo-950/10 hover:bg-indigo-50/50 dark:hover:bg-indigo-950/20 transition-all hover:scale-[1.01] group shadow-sm"
+                >
+                  <div className="p-2 bg-indigo-500/10 text-indigo-600 rounded-xl mb-3 group-hover:scale-105 transition-transform"><FileText size={20} /></div>
+                  <span className="font-bold text-sm text-gray-900 dark:text-white">Export Interviews CSV</span>
+                  <span className="text-xs text-gray-500 mt-1">Export all {jobs.length} recruiter interview schedules, access codes, and required skills.</span>
+                </button>
+
+                <button
+                  onClick={exportUsersCSV}
+                  className="flex flex-col items-start text-left p-4 sm:p-5 rounded-2xl border border-blue-500/20 bg-blue-50/30 dark:bg-blue-950/10 hover:bg-blue-50/50 dark:hover:bg-blue-950/20 transition-all hover:scale-[1.01] group shadow-sm"
+                >
+                  <div className="p-2 bg-blue-500/10 text-blue-600 rounded-xl mb-3 group-hover:scale-105 transition-transform"><Users size={20} /></div>
+                  <span className="font-bold text-sm text-gray-900 dark:text-white">Export Users Directory</span>
+                  <span className="text-xs text-gray-500 mt-1">Export all {users.length} registered candidate and recruiter profiles.</span>
+                </button>
+
+                <button
+                  onClick={exportFullDBJSON}
+                  className="flex flex-col items-start text-left p-4 sm:p-5 rounded-2xl border border-purple/20 bg-purple/5 hover:bg-purple/10 transition-all hover:scale-[1.01] group shadow-sm"
+                >
+                  <div className="p-2 bg-purple/10 text-purple rounded-xl mb-3 group-hover:scale-105 transition-transform"><Database size={20} /></div>
+                  <span className="font-bold text-sm text-gray-900 dark:text-white">Full DB Backup JSON</span>
+                  <span className="text-xs text-gray-500 mt-1">Download a single consolidated backup snapshot file of the entire platform database.</span>
+                </button>
+              </div>
+
+              {/* Data Explorer */}
+              <div className="space-y-4 pt-4 border-t border-gray-200 dark:border-white/10">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                  <div className="flex bg-gray-100 dark:bg-zinc-800 p-1 rounded-xl w-full sm:w-auto">
+                    {[
+                      { id: 'submissions', label: `Submissions (${allAttempts.length})` },
+                      { id: 'interviews', label: `Interviews (${jobs.length})` },
+                      { id: 'users', label: `Users (${users.length})` }
+                    ].map(sub => (
+                      <button
+                        key={sub.id}
+                        onClick={() => { setDbSubTab(sub.id as any); setSearchTerm(''); }}
+                        className={`flex-1 sm:flex-none px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition-all ${dbSubTab === sub.id
+                          ? 'bg-white dark:bg-zinc-900 shadow-sm text-gray-900 dark:text-white font-bold'
+                          : 'text-gray-500 hover:text-gray-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {sub.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="relative w-full sm:w-72">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder={`Search ${dbSubTab}...`}
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                    />
+                  </div>
+                </div>
+
+                {/* Submissions Table Explorer */}
+                {dbSubTab === 'submissions' && (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-white/5 bg-white dark:bg-zinc-900">
+                    <table className="w-full text-left min-w-[900px]">
+                      <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 text-xs uppercase font-semibold">
+                        <tr>
+                          <th className="px-6 py-3">Candidate</th>
+                          <th className="px-6 py-3">Contact Info</th>
+                          <th className="px-6 py-3">Applied Role</th>
+                          <th className="px-6 py-3">Scores (Overall/Resume/Q&A)</th>
+                          <th className="px-6 py-3">Completed Date</th>
+                          <th className="px-6 py-3 text-right">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-sm">
+                        {(filteredData() as any[]).map((item: any) => (
+                          <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 font-bold capitalize text-gray-900 dark:text-white">{item.candidateInfo?.name || 'N/A'}</td>
+                            <td className="px-6 py-4">
+                              <div className="text-gray-900 dark:text-white font-medium">{item.candidateInfo?.email || 'N/A'}</div>
+                              <div className="text-xs text-gray-500">{item.candidateInfo?.phone || 'N/A'}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="text-gray-900 dark:text-white font-medium truncate max-w-[150px]">{getInterviewTitle(item.interviewId)}</div>
+                              <div className="text-[10px] text-gray-500 font-mono">ID: {item.interviewId}</div>
+                            </td>
+                            <td className="px-6 py-4">
+                              <div className="flex gap-2">
+                                <span className="px-2 py-0.5 bg-blue-100 dark:bg-blue-900/20 text-blue-600 rounded text-xs font-bold" title="Overall Score">
+                                  {item.score || 'N/A'}
+                                </span>
+                                <span className="px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/20 text-emerald-600 rounded text-xs font-medium" title="Q&A Score">
+                                  Q: {item.qnaScore || 'N/A'}
+                                </span>
+                                <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/20 text-amber-600 rounded text-xs font-medium" title="Resume Score">
+                                  R: {item.resumeScore || 'N/A'}
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500 text-xs">
+                              {item.submittedAt?.toDate ? item.submittedAt.toDate().toLocaleString() : 'N/A'}
+                            </td>
+                            <td className="px-6 py-4 text-right">
+                              <a
+                                href={`/#/report/${item.interviewId}/${item.id}`}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-xs bg-primary/10 text-primary hover:bg-primary/20 px-3 py-1.5 rounded-lg transition-colors font-bold"
+                              >
+                                View Report &rarr;
+                              </a>
+                            </td>
+                          </tr>
+                        ))}
+                        {filteredData().length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="text-center py-8 text-gray-400 italic">No submissions matching search found.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Interviews Table Explorer */}
+                {dbSubTab === 'interviews' && (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-white/5 bg-white dark:bg-zinc-900">
+                    <table className="w-full text-left min-w-[800px]">
+                      <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 text-xs uppercase font-semibold">
+                        <tr>
+                          <th className="px-6 py-3">Interview Title</th>
+                          <th className="px-6 py-3">Department</th>
+                          <th className="px-6 py-3">Experience Required</th>
+                          <th className="px-6 py-3">Access Code</th>
+                          <th className="px-6 py-3">Difficulty</th>
+                          <th className="px-6 py-3">Date Created</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-sm">
+                        {(filteredData() as any[]).map((item: any) => (
+                          <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-white">
+                              {item.title}
+                              <div className="text-[10px] text-gray-500 font-mono font-normal">ID: {item.id}</div>
+                            </td>
+                            <td className="px-6 py-4 text-gray-700 dark:text-gray-300 font-medium">{item.department || item.category || 'N/A'}</td>
+                            <td className="px-6 py-4 text-gray-500">{item.minExperience}-{item.maxExperience} yrs</td>
+                            <td className="px-6 py-4 font-mono font-bold text-blue-600">{item.accessCode || 'N/A'}</td>
+                            <td className="px-6 py-4">
+                              <span className="px-2.5 py-1 bg-purple/10 text-purple rounded text-xs font-semibold">{item.difficulty || 'Medium'}</span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500 text-xs">{item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString() : 'N/A'}</td>
+                          </tr>
+                        ))}
+                        {filteredData().length === 0 && (
+                          <tr>
+                            <td colSpan={6} className="text-center py-8 text-gray-400 italic">No interviews matching search found.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Users Table Explorer */}
+                {dbSubTab === 'users' && (
+                  <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-white/5 bg-white dark:bg-zinc-900">
+                    <table className="w-full text-left min-w-[700px]">
+                      <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 text-xs uppercase font-semibold">
+                        <tr>
+                          <th className="px-6 py-3">Full Name</th>
+                          <th className="px-6 py-3">Email Address</th>
+                          <th className="px-6 py-3">Role</th>
+                          <th className="px-6 py-3">Account Status</th>
+                          <th className="px-6 py-3">Registration Date</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 dark:divide-white/5 text-sm">
+                        {(filteredData() as any[]).map((item: any) => (
+                          <tr key={item.id} className="hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
+                            <td className="px-6 py-4 font-bold text-gray-900 dark:text-white capitalize">{item.fullname || item.name || 'N/A'}</td>
+                            <td className="px-6 py-4 text-gray-600 dark:text-gray-300 font-medium">{item.email}</td>
+                            <td className="px-6 py-4 capitalize">
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${item.role === 'admin' ? 'bg-amber-100 text-amber-800' : item.role === 'recruiter' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                {item.role || 'candidate'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 capitalize">
+                              <span className={`px-2 py-0.5 rounded text-xs font-semibold ${item.accountStatus === 'disabled' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+                                {item.accountStatus || 'active'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-gray-500 text-xs">{item.createdAt?.toDate ? item.createdAt.toDate().toLocaleString() : 'N/A'}</td>
+                          </tr>
+                        ))}
+                        {filteredData().length === 0 && (
+                          <tr>
+                            <td colSpan={5} className="text-center py-8 text-gray-400 italic">No users matching search found.</td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             </div>
           )}
