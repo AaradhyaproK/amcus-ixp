@@ -23,6 +23,7 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
   const [candidateEmails, setCandidateEmails] = useState<string[]>([]);
   const [currentEmail, setCurrentEmail] = useState('');
 
+  const [eduInput, setEduInput] = useState('');
   const [formData, setFormData] = useState({
     title: '',
     companyName: '',
@@ -35,6 +36,8 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
     // New fields
     numQuestions: 5,
     employmentType: 'Full-time',
+    minExperience: 0,
+    maxExperience: 0,
     experience: 0,
     difficulty: 'Medium',
   });
@@ -88,6 +91,8 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
             category: jobData.category || interviewData.department || '',
             numQuestions: jobData.numQuestions || interviewData.numQuestions || 5,
             employmentType: interviewData.employmentType || 'Full-time',
+            minExperience: interviewData.minExperience || interviewData.experience || 0,
+            maxExperience: interviewData.maxExperience || interviewData.experience || 0,
             experience: interviewData.experience || 0,
             difficulty: jobData.difficulty || interviewData.difficulty || 'Medium',
           });
@@ -123,7 +128,17 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
   };
 
   const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    setFormData(prev => {
+      const updated = {
+        ...prev,
+        [name]: ['experience', 'minExperience', 'maxExperience', 'numQuestions'].includes(name) ? Number(value) : value
+      };
+      if (name === 'minExperience') {
+        updated.experience = Number(value);
+      }
+      return updated;
+    });
   };
 
   const handleAddManualQuestion = () => {
@@ -162,9 +177,29 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
     setFormData({ ...formData, skills: newSkills.join(', ') });
   };
 
+  const toggleEducation = (edu: string) => {
+    const currentEducations = formData.qualifications
+      ? formData.qualifications.split(',').map(e => e.trim()).filter(e => e)
+      : [];
+
+    let newEducations;
+    if (currentEducations.includes(edu)) {
+      newEducations = currentEducations.filter(e => e !== edu);
+    } else {
+      newEducations = [...currentEducations, edu];
+    }
+    setFormData({ ...formData, qualifications: newEducations.join(', ') });
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !jobId) return; // Should not happen if button is enabled
+
+    if (formData.maxExperience < formData.minExperience) {
+      alert("❌ Maximum experience cannot be less than minimum experience.");
+      return;
+    }
+
     setSaving(true);
 
     try {
@@ -199,7 +234,9 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
         description: formData.description,
         department: formData.category,
         employmentType: formData.employmentType,
-        experience: Number(formData.experience),
+        minExperience: Number(formData.minExperience),
+        maxExperience: Number(formData.maxExperience),
+        experience: Number(formData.minExperience), // keep backward compatibility
         skills: formData.skills,
         education: formData.qualifications,
         deadline: formData.deadline,
@@ -263,12 +300,63 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
 
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Qualifications</label>
-          <textarea 
-            required rows={3}
-            className="mt-1 w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
-            value={formData.qualifications}
-            onChange={handleFormChange} name="qualifications"
-          />
+          <div className="flex flex-wrap gap-2 mb-2 min-h-[44px] p-2 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl">
+            {formData.qualifications ? formData.qualifications.split(',').map(e => e.trim()).filter(e => e).map(edu => (
+              <span key={edu} className="px-3 py-1 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 rounded-lg text-sm flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                {edu}
+                <button type="button" onClick={() => toggleEducation(edu)} className="hover:text-black dark:hover:text-white transition-colors">&times;</button>
+              </span>
+            )) : <span className="text-gray-400 dark:text-gray-500 text-sm p-1.5 italic">No qualifications selected</span>}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <select
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm"
+              value=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  toggleEducation(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+            >
+              <option value="">-- Select Predefined Level --</option>
+              {["High School", "Bachelor's", "Master's", "PhD"].map(edu => (
+                <option key={edu} value={edu}>{edu}</option>
+              ))}
+            </select>
+
+            <div className="flex gap-2">
+              <input
+                type="text"
+                className="flex-1 min-w-0 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm"
+                placeholder="Or type custom qualification..."
+                value={eduInput}
+                onChange={e => setEduInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (eduInput.trim()) {
+                      toggleEducation(eduInput.trim());
+                      setEduInput('');
+                    }
+                  }
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  if (eduInput.trim()) {
+                    toggleEducation(eduInput.trim());
+                    setEduInput('');
+                  }
+                }}
+                className="px-4 py-3 bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors font-medium text-sm shrink-0"
+              >
+                Add
+              </button>
+            </div>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -329,7 +417,27 @@ const EditJobModal: React.FC<EditJobModalProps> = ({ jobId, onClose }) => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-slate-300">Required Experience (Years)</label>
-              <input type="number" name="experience" value={formData.experience} onChange={handleFormChange} className="mt-1 w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white" />
+              <div className="flex items-center gap-2 mt-1">
+                <input
+                  type="number"
+                  name="minExperience"
+                  placeholder="Min"
+                  value={formData.minExperience}
+                  onChange={handleFormChange}
+                  min="0"
+                  className="w-1/2 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
+                />
+                <span className="text-gray-400 dark:text-gray-500 font-medium">to</span>
+                <input
+                  type="number"
+                  name="maxExperience"
+                  placeholder="Max"
+                  value={formData.maxExperience}
+                  onChange={handleFormChange}
+                  min="0"
+                  className="w-1/2 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white"
+                />
+              </div>
             </div>
         </div>
 
