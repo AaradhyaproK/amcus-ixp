@@ -162,5 +162,11 @@ service cloud.firestore {
       allow get, list: if resource.data.approved == true || isAdmin();
       allow update, delete: if isAdmin();
     }
+
+    match /settings/{settingId} {
+      allow get: if true;
+      allow list: if isStaff();
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

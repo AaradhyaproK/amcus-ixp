@@ -25,10 +25,7 @@ const AdminDashboard: React.FC = () => {
   const [adminData, setAdminData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [allAttempts, setAllAttempts] = useState<any[]>([]);
-  const [perInterviewPrice, setPerInterviewPrice] = useState<number>(() => {
-    const saved = localStorage.getItem('perInterviewPrice');
-    return saved ? Number(saved) : 150;
-  });
+  const [perInterviewPrice, setPerInterviewPrice] = useState<number>(150);
 
   // UI State
   const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'jobs' | 'transactions' | 'submissions' | 'reviews' | 'api' | 'dbAccess'>('overview');
@@ -119,6 +116,13 @@ const AdminDashboard: React.FC = () => {
       setAllReviews(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
 
+    // 10. Universal Interview Price - Real-time
+    const unsubPricing = onSnapshot(doc(db, 'settings', 'pricing'), (docSnap) => {
+      if (docSnap.exists()) {
+        setPerInterviewPrice(Number(docSnap.data().perInterviewPrice) || 150);
+      }
+    });
+
     return () => {
       unsubRequests();
       unsubUsers();
@@ -129,6 +133,7 @@ const AdminDashboard: React.FC = () => {
       unsubContact();
       unsubBugs();
       unsubReviews();
+      unsubPricing();
     };
   }, []);
 
@@ -475,10 +480,6 @@ const AdminDashboard: React.FC = () => {
   const submissionsData = activeTab === 'submissions' ? filteredData() as { contacts: any[], bugs: any[] } : { contacts: [], bugs: [] };
 
   // --- Dynamic Pricing Calculations ---
-  const handlePriceChange = (val: number) => {
-    setPerInterviewPrice(val);
-    localStorage.setItem('perInterviewPrice', val.toString());
-  };
 
   const totalEarnings = allAttempts.length * perInterviewPrice;
 
@@ -512,6 +513,36 @@ const AdminDashboard: React.FC = () => {
       return j.createdAt.toDate() >= startOfMonth;
     });
     return interviewsThisMonth.length;
+  }, [jobs]);
+
+  const todayEarnings = React.useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const attemptsToday = allAttempts.filter(a => {
+      if (!a.submittedAt?.toDate) return false;
+      return a.submittedAt.toDate() >= todayStart;
+    });
+    return attemptsToday.length * perInterviewPrice;
+  }, [allAttempts, perInterviewPrice]);
+
+  const todaySubmissionsCount = React.useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const attemptsToday = allAttempts.filter(a => {
+      if (!a.submittedAt?.toDate) return false;
+      return a.submittedAt.toDate() >= todayStart;
+    });
+    return attemptsToday.length;
+  }, [allAttempts]);
+
+  const todayInterviewsCount = React.useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const interviewsToday = jobs.filter(j => {
+      if (!j.createdAt?.toDate) return false;
+      return j.createdAt.toDate() >= todayStart;
+    });
+    return interviewsToday.length;
   }, [jobs]);
 
   // --- DB Access Export Functions ---
@@ -812,44 +843,22 @@ const AdminDashboard: React.FC = () => {
 
           {activeTab === 'overview' && (
             <div className="space-y-4 sm:space-y-6 animate-in fade-in duration-300">
-              {/* Dynamic Price Config Bar */}
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 rounded-2xl gap-4 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="p-2.5 bg-primary/10 text-primary rounded-xl shrink-0">
-                    <DollarSign className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-sm text-gray-900 dark:text-white font-sans">Earnings Configuration</h3>
-                    <p className="text-xs text-gray-500 font-sans">Specify pricing to multiply responses & calculate earnings</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <span className="text-xs font-semibold text-gray-500 whitespace-nowrap font-sans">Per Interview Price:</span>
-                  <div className="relative flex-1 sm:w-40">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-xs font-bold">₹</span>
-                    <input
-                      type="number"
-                      value={perInterviewPrice}
-                      onChange={(e) => handlePriceChange(Number(e.target.value))}
-                      className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-zinc-800 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all text-right font-sans"
-                      placeholder="Price"
-                      min="0"
-                    />
-                  </div>
-                </div>
-              </div>
-
               {/* Stats Rows */}
               <div ref={statsRef} className="space-y-6 sm:space-y-8">
                 
                 {/* Row 1: Revenue & Financials */}
                 <div className="p-5 sm:p-6 rounded-3xl border border-emerald-500/10 bg-emerald-50/10 dark:bg-emerald-950/5 space-y-4">
-                  <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
-                    <TrendingUp className="w-5 h-5 animate-pulse" />
-                    <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Financial Performance Dashboard</span>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                      <TrendingUp className="w-5 h-5 animate-pulse" />
+                      <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Financial Performance Dashboard</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-bold rounded-full font-sans max-w-fit">
+                      <DollarSign className="w-3.5 h-3.5" />
+                      <span>Per Interview Price: ₹{perInterviewPrice}</span>
+                    </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
                       <div className="flex justify-between items-start">
                         <div>
@@ -881,6 +890,22 @@ const AdminDashboard: React.FC = () => {
                         <span>current calendar month</span>
                       </div>
                     </div>
+
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Daily Earning</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">₹{todayEarnings.toLocaleString()}</h3>
+                        </div>
+                        <div className="p-3 bg-lime-500/10 text-lime-600 dark:text-lime-400 rounded-2xl group-hover:scale-110 transition-transform">
+                          <DollarSign className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-lime-600 dark:text-lime-400">
+                        <span className="px-2 py-0.5 bg-lime-500/10 dark:bg-lime-500/20 rounded">{todaySubmissionsCount} paid responses</span>
+                        <span>today's earning</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -890,7 +915,7 @@ const AdminDashboard: React.FC = () => {
                     <Users className="w-5 h-5 animate-pulse" />
                     <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Candidate Response Analytics</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
                       <div className="flex justify-between items-start">
                         <div>
@@ -922,6 +947,22 @@ const AdminDashboard: React.FC = () => {
                         <span>evaluation cycle</span>
                       </div>
                     </div>
+
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Daily Responses</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">{todaySubmissionsCount}</h3>
+                        </div>
+                        <div className="p-3 bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 rounded-2xl group-hover:scale-110 transition-transform">
+                          <CheckCircle className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-indigo-600 dark:text-indigo-400">
+                        <span className="px-2 py-0.5 bg-indigo-500/10 dark:bg-indigo-500/20 rounded">Completed Today</span>
+                        <span>responses tracked</span>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -931,7 +972,7 @@ const AdminDashboard: React.FC = () => {
                     <Video className="w-5 h-5 animate-pulse" />
                     <span className="text-xs sm:text-sm font-extrabold uppercase tracking-widest font-sans">Recruiter Campaign Activity</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
                       <div className="flex justify-between items-start">
                         <div>
@@ -961,6 +1002,22 @@ const AdminDashboard: React.FC = () => {
                       <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-pink-600">
                         <span className="px-2 py-0.5 bg-pink-500/10 rounded">Active Campaigns</span>
                         <span>launched in current cycle</span>
+                      </div>
+                    </div>
+
+                    <div className="relative overflow-hidden group p-5 rounded-2xl bg-white dark:bg-zinc-900 border border-gray-150 dark:border-white/5 shadow-sm hover:shadow-md transition-all hover:scale-[1.01]">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider font-sans">Posted Today</p>
+                          <h3 className="text-2xl sm:text-3xl font-black mt-2 text-gray-900 dark:text-white font-sans">{todayInterviewsCount}</h3>
+                        </div>
+                        <div className="p-3 bg-rose-500/10 text-rose-600 dark:text-rose-400 rounded-2xl group-hover:scale-110 transition-transform">
+                          <Video className="w-6 h-6" />
+                        </div>
+                      </div>
+                      <div className="mt-4 flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400">
+                        <span className="px-2 py-0.5 bg-rose-500/10 dark:bg-rose-500/20 rounded">Campaigns Today</span>
+                        <span>new interview posts</span>
                       </div>
                     </div>
                   </div>

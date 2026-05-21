@@ -1,9 +1,9 @@
 import React, { useEffect, useState, useRef, useLayoutEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, setDoc } from 'firebase/firestore';
 import { db, auth } from '../services/firebase';
 import { useTheme } from '../context/ThemeContext';
-import { User, Mail, Calendar, Shield, Sun, Moon, Monitor, ArrowLeft, Edit2, Save, X, FileText } from 'lucide-react';
+import { User, Mail, Calendar, Shield, Sun, Moon, Monitor, ArrowLeft, Edit2, Save, X, FileText, DollarSign } from 'lucide-react';
 import gsap from 'gsap';
 import { signOut } from 'firebase/auth';
 
@@ -16,6 +16,28 @@ const AdminProfile: React.FC = () => {
     const [editData, setEditData] = useState({
         fullname: ''
     });
+    const [perInterviewPrice, setPerInterviewPrice] = useState<number>(150);
+    const [editPrice, setEditPrice] = useState<string>('150');
+    const [isEditingPrice, setIsEditingPrice] = useState(false);
+
+    const handleSavePrice = async () => {
+        try {
+            const priceVal = Number(editPrice) || 150;
+            try {
+                await updateDoc(doc(db, 'settings', 'pricing'), {
+                    perInterviewPrice: priceVal
+                });
+            } catch (e) {
+                await setDoc(doc(db, 'settings', 'pricing'), {
+                    perInterviewPrice: priceVal
+                });
+            }
+            setPerInterviewPrice(priceVal);
+            setIsEditingPrice(false);
+        } catch (error) {
+            console.error("Error saving universal price setting:", error);
+        }
+    };
 
     // GSAP Animation Refs
     const headerRef = useRef<HTMLDivElement>(null);
@@ -44,7 +66,20 @@ const AdminProfile: React.FC = () => {
             setLoading(false);
         });
 
-        return () => unsubscribe();
+        const unsubscribePricing = onSnapshot(doc(db, 'settings', 'pricing'), (docSnap) => {
+            if (docSnap.exists()) {
+                const price = docSnap.data().perInterviewPrice || 150;
+                setPerInterviewPrice(price);
+                setEditPrice(price.toString());
+            }
+        }, (error) => {
+            console.error("Error fetching pricing settings:", error);
+        });
+
+        return () => {
+            unsubscribe();
+            unsubscribePricing();
+        };
     }, []);
 
     // GSAP Profile Page Animation
@@ -171,7 +206,7 @@ const AdminProfile: React.FC = () => {
             <div className="max-w-3xl mx-auto py-8 sm:py-16 px-4 sm:px-6">
                 <div ref={profileCardRef} className="bg-white dark:bg-zinc-900/50 rounded-2xl sm:rounded-[32px] border border-gray-200 dark:border-white/5 p-6 sm:p-12 shadow-2xl shadow-black/5 dark:shadow-none backdrop-blur-sm relative overflow-hidden">
                     {/* Decoration */}
-                    <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-primary/5 rounded-bl-full blur-3xl opacity-50" />
+                    <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-primary/5 rounded-bl-full blur-3xl opacity-50 pointer-events-none" />
 
                     {/* Profile Header */}
                     <div className="flex flex-col items-center text-center mb-8 sm:mb-16">
@@ -253,6 +288,68 @@ const AdminProfile: React.FC = () => {
                                     {adminData?.createdAt?.toDate ? adminData.createdAt.toDate().toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Recently Activated'}
                                 </span>
                             </div>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Platform Settings Card */}
+                <div className="mt-8 bg-white dark:bg-zinc-900/50 rounded-2xl sm:rounded-[32px] border border-gray-200 dark:border-white/5 p-6 sm:p-10 shadow-2xl shadow-black/5 dark:shadow-none backdrop-blur-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-24 sm:w-32 h-24 sm:h-32 bg-emerald-500/5 rounded-bl-full blur-3xl opacity-50 pointer-events-none" />
+                    
+                    <div className="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 className="text-lg sm:text-xl font-bold tracking-tight">Platform Configuration</h3>
+                            <p className="text-[10px] text-gray-500 font-medium uppercase tracking-widest mt-0.5">Universal Pricing Settings</p>
+                        </div>
+                        
+                        {!isEditingPrice ? (
+                            <button
+                                onClick={() => setIsEditingPrice(true)}
+                                className="flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-lg sm:rounded-xl hover:bg-emerald-500/20 transition-all font-bold text-xs"
+                            >
+                                <Edit2 size={12} /> Edit Price
+                            </button>
+                        ) : (
+                            <div className="flex gap-2">
+                                <button
+                                    onClick={handleSavePrice}
+                                    className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-emerald-500 text-white rounded-lg sm:rounded-xl hover:bg-emerald-500/90 transition-all font-bold text-xs"
+                                >
+                                    <Save size={12} /> Save
+                                </button>
+                                <button
+                                    onClick={() => {
+                                        setIsEditingPrice(false);
+                                        setEditPrice(perInterviewPrice.toString());
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 dark:bg-white/5 rounded-lg sm:rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-all font-bold text-xs"
+                                >
+                                    <X size={12} /> Cancel
+                                </button>
+                            </div>
+                        )}
+                    </div>
+
+                    <div className="space-y-4">
+                        <div className="p-4 sm:p-6 bg-gray-50 dark:bg-black/20 rounded-xl sm:rounded-2xl border border-gray-200 dark:border-white/5">
+                            <label className="text-sm font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider block mb-3">Per Interview Price:</label>
+                            <div className="flex items-center gap-3">
+                                <div className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">₹</div>
+                                {isEditingPrice ? (
+                                    <input
+                                        type="number"
+                                        autoFocus
+                                        value={editPrice}
+                                        onChange={(e) => setEditPrice(e.target.value)}
+                                        className="w-32 sm:w-48 text-2xl sm:text-3xl font-black bg-transparent border-b-2 border-emerald-500 focus:outline-none transition-all py-1 font-sans text-gray-900 dark:text-white"
+                                        placeholder="150"
+                                        min="0"
+                                    />
+                                ) : (
+                                    <span className="text-2xl sm:text-3xl font-black text-gray-900 dark:text-white font-sans">{perInterviewPrice}</span>
+                                )}
+                            </div>
+                            <p className="text-xs text-gray-400 mt-2 font-medium">This amount is charged per completed candidate interview and is universal across the entire platform.</p>
                         </div>
                     </div>
                 </div>
