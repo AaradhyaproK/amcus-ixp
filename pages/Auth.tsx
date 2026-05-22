@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { signInWithEmailAndPassword, sendPasswordResetEmail, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence } from 'firebase/auth';
-import { doc, serverTimestamp, addDoc, collection, getDoc } from 'firebase/firestore';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification, sendPasswordResetEmail, signOut, setPersistence, browserLocalPersistence, browserSessionPersistence, GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { doc, setDoc, serverTimestamp, addDoc, collection, getDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebase';
 import { useNavigate, Link } from 'react-router-dom';
 import gsap from 'gsap';
@@ -57,7 +57,9 @@ const AuthPage: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullname, setFullname] = useState('');
+  const [role, setRole] = useState<'recruiter' | 'candidate'>('candidate');
   const [experience, setExperience] = useState(0);
+  const [phone, setPhone] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -80,15 +82,6 @@ const AuthPage: React.FC = () => {
           return;
         }
       }
-
-      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-      const userRole = userDoc.data()?.role;
-      if (userRole !== 'recruiter' && userRole !== 'admin') {
-        await signOut(auth);
-        setError('This Dsauce portal is only for recruiters and admins. Candidates should use the interview or assessment link sent to them.');
-        return;
-      }
-
       navigate('/');
     } catch (err: any) {
       setError("Login failed: " + err.message);
@@ -103,19 +96,58 @@ const AuthPage: React.FC = () => {
     setError(null);
     setMessage(null);
 
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      setLoading(false);
+      return;
+    }
+
+    // Handle Recruiter Request (Do not create Auth user yet)
+    if (role === 'recruiter') {
+      try {
+        await addDoc(collection(db, 'recruiterRequests'), {
+          email,
+          fullname,
+          experience: Number(experience),
+          status: 'pending',
+          createdAt: serverTimestamp()
+        });
+        setMessage("Request sent! An admin will review your recruiter application. You will be notified once approved.");
+      } catch (err: any) {
+        setError("Request failed: " + err.message);
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
     try {
-      await addDoc(collection(db, 'recruiterRequests'), {
+      const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+      const userData: any = {
+        uid: cred.user.uid,
         email,
         fullname,
+        role,
         experience: Number(experience),
-        role: 'recruiter',
-        status: 'pending',
+        accountStatus: 'active',
         createdAt: serverTimestamp(),
-      });
-      setMessage("Request sent! An admin will review your recruiter access request and create your account once approved.");
+        profilePhotoURL: null
+      };
+
+      if (role === 'candidate') {
+        userData.phone = phone;
+      }
+
+      await setDoc(doc(db, 'users', cred.user.uid), userData);
+
+      await sendEmailVerification(cred.user);
+      await signOut(auth);
+
+      setShowVerifyPopup(true);
       setIsLogin(true);
     } catch (err: any) {
-      setError("Request failed: " + err.message);
+      setError("Signup failed: " + err.message);
     } finally {
       setLoading(false);
     }
@@ -138,11 +170,40 @@ const AuthPage: React.FC = () => {
     }
   };
 
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const provider = new GoogleAuthProvider();
+      const result = await signInWithPopup(auth, provider);
+      
+      const userDoc = await getDoc(doc(db, 'users', result.user.uid));
+      if (!userDoc.exists()) {
+        await setDoc(doc(db, 'users', result.user.uid), {
+          uid: result.user.uid,
+          email: result.user.email,
+          fullname: result.user.displayName || '',
+          role: 'candidate',
+          experience: 0,
+          accountStatus: 'active',
+          createdAt: serverTimestamp(),
+          profilePhotoURL: result.user.photoURL || null
+        });
+      }
+      navigate('/');
+    } catch (err: any) {
+      setError("Google Sign-In failed: " + err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
-    <div className="min-h-screen flex flex-col relative bg-background text-foreground font-sans selection:bg-primary/20">
+    <div className="dark min-h-screen flex flex-col relative bg-[#050509] text-white font-sans selection:bg-primary/30">
 
       {/* Background Ambience */}
-      <div className="fixed inset-0 z-0 pointer-events-none opacity-20 dark:opacity-100 transition-opacity">
+      <div className="fixed inset-0 z-0 pointer-events-none dark">
         <BackgroundPaths />
       </div>
 
@@ -150,20 +211,20 @@ const AuthPage: React.FC = () => {
         <div className="auth-card w-full max-w-4xl grid grid-cols-1 md:grid-cols-2 gap-0 rounded-[14px] overflow-hidden min-h-[550px]">
 
           {/* Left Side - Form Section */}
-          <div className="auth-panel flex flex-col justify-center p-8 md:p-10 relative">
+          <div className="flex flex-col justify-center p-8 md:p-10 relative">
 
             <div className="w-full max-w-sm mx-auto">
               {/* Header */}
               <div className="mb-6">
                 <h1 className="text-[22px] font-semibold tracking-tight mb-2 text-white">
-                  {isReset ? 'Reset Password' : isLogin ? 'Welcome back!' : 'Request recruiter access'}
+                  {isReset ? 'Reset Password' : isLogin ? 'Welcome back!' : 'Create account'}
                 </h1>
                 <p className="text-zinc-400 text-sm">
                   {isReset
                     ? 'Enter your email to receive a reset link'
                     : isLogin
-                      ? 'Login to access the Dsauce recruiter or admin portal'
-                      : 'Submit your details for recruiter account approval'}
+                      ? 'Login to access your dashboard'
+                      : 'Get started with your free account'}
                 </p>
               </div>
 
@@ -239,7 +300,18 @@ const AuthPage: React.FC = () => {
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5 col-span-2">
+                        <div className="space-y-1.5">
+                          <label className="saas-ui-mono text-xs font-medium text-zinc-300 ml-1">I am a...</label>
+                          <select
+                            className="w-full px-3 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all appearance-none cursor-pointer hover:border-zinc-700"
+                            value={role}
+                            onChange={e => setRole(e.target.value as 'candidate' | 'recruiter')}
+                          >
+                            <option value="candidate">Candidate</option>
+                            <option value="recruiter">Recruiter</option>
+                          </select>
+                        </div>
+                        <div className="space-y-1.5">
                           <label className="saas-ui-mono text-xs font-medium text-zinc-300 ml-1">Experience (Yrs)</label>
                           <input
                             type="number"
@@ -251,6 +323,21 @@ const AuthPage: React.FC = () => {
                           />
                         </div>
                       </div>
+
+                      {role === 'candidate' && (
+                        <div className="space-y-1.5">
+                          <label className="saas-ui-mono text-xs font-medium text-zinc-300 ml-1">Phone Number</label>
+                          <input
+                            type="tel"
+                            pattern="[0-9]{10}"
+                            required
+                            placeholder="10 digit number"
+                            className="w-full px-3 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all hover:border-zinc-700"
+                            value={phone}
+                            onChange={e => setPhone(e.target.value)}
+                          />
+                        </div>
+                      )}
                     </>
                   )}
 
@@ -272,26 +359,25 @@ const AuthPage: React.FC = () => {
                     </div>
                   </div>
 
-                  {isLogin && (
-                    <>
-                      <div className="space-y-1.5">
-                        <label className="saas-ui-mono text-xs font-medium text-zinc-300 ml-1">Password</label>
-                        <div className="relative group">
-                          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-primary transition-colors">
-                            <i className="fa-solid fa-lock text-sm"></i>
-                          </div>
-                          <input
-                            type="password"
-                            required
-                            minLength={6}
-                            className="w-full pl-9 pr-3 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all hover:border-zinc-700"
-                            placeholder="Enter password"
-                            value={password}
-                            onChange={e => setPassword(e.target.value)}
-                          />
-                        </div>
+                  <div className="space-y-1.5">
+                    <label className="saas-ui-mono text-xs font-medium text-zinc-300 ml-1">Password</label>
+                    <div className="relative group">
+                      <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-zinc-500 group-focus-within:text-primary transition-colors">
+                        <i className="fa-solid fa-lock text-sm"></i>
                       </div>
+                      <input
+                        type="password"
+                        required
+                        minLength={6}
+                        className="w-full pl-9 pr-3 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-lg text-sm text-white placeholder-zinc-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all hover:border-zinc-700"
+                        placeholder="Enter password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                      />
+                    </div>
+                  </div>
 
+                  {isLogin && (
                     <div className="flex items-center justify-between pt-1">
                       <label className="flex items-center gap-2 cursor-pointer group">
                         <div className={`w-3.5 h-3.5 rounded border transition-colors flex items-center justify-center ${rememberMe ? 'border-primary bg-primary' : 'border-zinc-700 bg-zinc-800 group-hover:border-primary'}`}>
@@ -313,7 +399,6 @@ const AuthPage: React.FC = () => {
                         Forgot password?
                       </button>
                     </div>
-                    </>
                   )}
 
                   <button
@@ -327,28 +412,38 @@ const AuthPage: React.FC = () => {
                         Processing...
                       </span>
                     ) : (
-                      isLogin ? 'Log in' : 'Submit Request'
+                      isLogin ? 'Log in' : (role === 'recruiter' ? 'Submit Request' : 'Sign Up')
                     )}
                   </button>
 
                   <div className="relative pt-3">
                     <div className="absolute inset-0 flex items-center">
-                      <div className="auth-divider w-full border-t border-zinc-800"></div>
+                      <div className="w-full border-t border-zinc-800"></div>
                     </div>
                     <div className="relative flex justify-center text-xs">
-                      <span className="auth-divider-label px-2 bg-[#0a0a0a] text-zinc-500">Or continue with</span>
+                      <span className="px-2 bg-[#0a0a0a] text-zinc-500">Or continue with</span>
                     </div>
                   </div>
 
-                  <div className="text-center">
+                  <button
+                    type="button"
+                    onClick={handleGoogleSignIn}
+                    disabled={loading}
+                    className="w-full py-2.5 rounded-[12px] bg-white text-black font-semibold transition-all hover:bg-zinc-200 disabled:opacity-50 disabled:cursor-not-allowed mt-4 text-sm flex items-center justify-center gap-2"
+                  >
+                    <i className="fa-brands fa-google"></i>
+                    Sign in with Google
+                  </button>
+
+                  <div className="text-center mt-4">
                     <button
                       type="button"
                       onClick={() => setIsLogin(!isLogin)}
                       className="text-zinc-400 hover:text-white transition-colors text-xs"
                     >
-                      {isLogin ? "Need recruiter access? " : "Already have portal access? "}
+                      {isLogin ? "Don't have an account? " : "Already have an account? "}
                       <span className="text-primary font-semibold hover:underline ml-1">
-                        {isLogin ? "Request it" : "Log in"}
+                        {isLogin ? "Sign up" : "Log in"}
                       </span>
                     </button>
                   </div>
@@ -357,7 +452,7 @@ const AuthPage: React.FC = () => {
             </div>
 
             <div className="mt-8 text-center">
-              <Link to="/" className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors text-xs">
+              <Link to="/" className="inline-flex items-center gap-2 text-zinc-600 hover:text-zinc-300 transition-colors text-xs">
                 <i className="fa-solid fa-arrow-left"></i> Back to Homepage
               </Link>
             </div>
@@ -385,9 +480,9 @@ const AuthPage: React.FC = () => {
 
                 <img
                   ref={logoRef}
-                  src="/logo-partnership-dark.png"
-                  alt="InterviewXpert X DSource partnership logo"
-                  className="w-56 max-w-full h-auto mb-6 shadow-xl shadow-cyan-500/10 opacity-0"
+                  src="/logo-white.png"
+                  alt="InterviewXpert Logo"
+                  className="w-16 h-16 rounded-xl mb-6 shadow-xl shadow-yellow-500/10 opacity-0"
                 />
 
                 <h3
@@ -402,7 +497,7 @@ const AuthPage: React.FC = () => {
                   ref={descRef}
                   className="text-zinc-400 text-base leading-relaxed max-w-lg mb-8 opacity-0"
                 >
-                  Manage Dsauce hiring workflows, recruiter access, and admin operations from one secure portal.
+                  Join thousands of candidates using AI to land their dream jobs at top tech companies.
                 </p>
 
                 <div ref={featuresRef} className="space-y-4">
@@ -412,7 +507,7 @@ const AuthPage: React.FC = () => {
                     </div>
                     <div>
                       <span className="block text-white font-semibold text-sm">Real-time AI Feedback</span>
-                      <span className="text-zinc-500 text-xs">Review structured interview and assessment outcomes faster</span>
+                      <span className="text-zinc-500 text-xs">Get instant corrections as you speak</span>
                     </div>
                   </div>
 
@@ -422,7 +517,7 @@ const AuthPage: React.FC = () => {
                     </div>
                     <div>
                       <span className="block text-white font-semibold text-sm">Instant Performance Score</span>
-                      <span className="text-zinc-500 text-xs">Track invite-driven hiring progress with less manual effort</span>
+                      <span className="text-zinc-500 text-xs">Know exactly where you stand</span>
                     </div>
                   </div>
                 </div>
@@ -435,24 +530,24 @@ const AuthPage: React.FC = () => {
       </div>
 
       {/* Footer - Minimal */}
-      <footer className="relative z-10 py-6 text-center border-t border-border bg-background/80 backdrop-blur-sm">
+      <footer className="relative z-10 py-6 text-center border-t border-white/5 bg-black/50 backdrop-blur-sm">
         <div className="flex items-center justify-center gap-6 mb-4">
-          <Link to="/contact" className="group flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors">
-            <span className="p-1.5 rounded-lg bg-muted group-hover:bg-secondary transition-colors ring-1 ring-border">
+          <Link to="/contact" className="group flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-white transition-colors">
+            <span className="p-1.5 rounded-lg bg-white/5 group-hover:bg-white/10 transition-colors ring-1 ring-white/5 group-hover:ring-white/20">
               <Mail size={14} />
             </span>
             Contact Support
           </Link>
-          <div className="w-px h-4 bg-border"></div>
-          <Link to="/report-bug" className="group flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-red-500 transition-colors">
-            <span className="p-1.5 rounded-lg bg-muted group-hover:bg-red-500/10 transition-colors ring-1 ring-border">
+          <div className="w-px h-4 bg-white/10"></div>
+          <Link to="/report-bug" className="group flex items-center gap-2 text-xs font-medium text-zinc-400 hover:text-red-400 transition-colors">
+            <span className="p-1.5 rounded-lg bg-white/5 group-hover:bg-red-500/10 transition-colors ring-1 ring-white/5 group-hover:ring-red-500/20">
               <Bug size={14} />
             </span>
             Report Issue
           </Link>
         </div>
-        <p className="text-[10px] text-muted-foreground">
-          &copy; {new Date().getFullYear()} InterviewXpert. Designed by <span className="text-foreground">Team Interview Expert</span>.
+        <p className="text-[10px] text-zinc-600">
+          &copy; {new Date().getFullYear()} InterviewXpert. Designed by <span className="text-zinc-400">Team Interview Expert</span>.
         </p>
       </footer>
 
@@ -463,9 +558,9 @@ const AuthPage: React.FC = () => {
             <div className="w-16 h-16 bg-blue-500/20 text-blue-400 rounded-full flex items-center justify-center mx-auto mb-6">
               <i className="fa-regular fa-envelope-open text-2xl"></i>
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-2">Account Created!</h3>
-            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-              We've sent a verification link to your email. <strong className="text-foreground">Please check your inbox (and spam/junk folder)</strong>, verify your email address, and then log in.
+            <h3 className="text-2xl font-bold text-white mb-2">Account Created!</h3>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              We've sent a verification link to your email. <strong className="text-zinc-200">Please check your inbox (and spam/junk folder)</strong>, verify your email address, and then log in.
             </p>
             <button 
               onClick={() => setShowVerifyPopup(false)}
@@ -484,9 +579,9 @@ const AuthPage: React.FC = () => {
             <div className="w-16 h-16 bg-red-500/10 text-red-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <i className="fa-solid fa-triangle-exclamation text-2xl"></i>
             </div>
-            <h3 className="text-2xl font-bold text-foreground mb-2">Email Not Verified</h3>
-            <p className="text-muted-foreground text-sm mb-6 leading-relaxed">
-              You must verify your email before logging in. <strong className="text-foreground">Please check your inbox and spam/junk folder</strong> for the verification link.
+            <h3 className="text-2xl font-bold text-white mb-2">Email Not Verified</h3>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              You must verify your email before logging in. <strong className="text-zinc-200">Please check your inbox and spam/junk folder</strong> for the verification link.
               <br /><br />
               If you did not receive a link, please fill out the Contact Form to have an admin manually verify your account.
             </p>
