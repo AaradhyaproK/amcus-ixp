@@ -1682,12 +1682,34 @@ const ActiveInterviewSession: React.FC<{
   const [tabWarning, setTabWarning] = useState<string | null>(null);
   const tabWarningTimerRef = useRef<any>(null);
 
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+  });
+
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+  });
   const [fullscreenEscapes, setFullscreenEscapes] = useState(0);
   const [isTerminated, setIsTerminated] = useState(false);
   const [fullscreenError, setFullscreenError] = useState<string | null>(null);
-  const hasEnteredFullscreenRef = useRef(false);
-  const sessionReady = isFullscreen && cameraReady && !isTerminated;
+  const hasEnteredFullscreenRef = useRef(isFullscreen);
+  const sessionReady = (isFullscreen || isMobile) && cameraReady && !isTerminated;
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMob = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+      setIsMobile(isMob);
+      if (isMob) {
+        setIsFullscreen(true);
+        hasEnteredFullscreenRef.current = true;
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const stopRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
@@ -1787,6 +1809,11 @@ const ActiveInterviewSession: React.FC<{
     if (isTerminated) return;
 
     const handleFullscreenChange = () => {
+      if (isMobile) {
+        setIsFullscreen(true);
+        hasEnteredFullscreenRef.current = true;
+        return;
+      }
       const isFS = !!getFullscreenElement();
       setIsFullscreen(isFS);
       
@@ -1818,7 +1845,7 @@ const ActiveInterviewSession: React.FC<{
       document.removeEventListener('webkitfullscreenchange', handleFullscreenChange as EventListener);
       document.removeEventListener('MSFullscreenChange', handleFullscreenChange as EventListener);
     };
-  }, [isTerminated, onFinish]);
+  }, [isTerminated, onFinish, isMobile]);
 
 
   // Tab Visibility
@@ -2028,6 +2055,7 @@ const ActiveInterviewSession: React.FC<{
   };
 
   const renderFullscreenOverlay = () => {
+    if (isMobile) return null;
     if (!isFullscreen && !isTerminated) {
       return createPortal(
         <div className="interview-room-overlay fixed inset-0 z-[10000] bg-black/95 flex items-center justify-center p-4 sm:p-6 text-white text-center">

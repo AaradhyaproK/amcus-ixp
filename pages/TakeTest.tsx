@@ -235,10 +235,32 @@ const TakeTest: React.FC = () => {
   const [showCalculator, setShowCalculator] = useState(false);
   const [activeCodeTab, setActiveCodeTab] = useState<'problem' | 'code'>('problem');
   
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+  });
+  
+  const [isFullscreen, setIsFullscreen] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+  });
   const [fullscreenEscapes, setFullscreenEscapes] = useState(0);
   const [isTerminated, setIsTerminated] = useState(false);
-  const hasEnteredFullscreenRef = useRef(false);
+  const hasEnteredFullscreenRef = useRef(isFullscreen);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const isMob = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth <= 768;
+      setIsMobile(isMob);
+      if (isMob) {
+        setIsFullscreen(true);
+        hasEnteredFullscreenRef.current = true;
+      }
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
   
   const [step, setStep] = useState<'collect-info' | 'test' | 'finish'>(user ? 'test' : 'collect-info');
   const [candidateInfo, setCandidateInfo] = useState({
@@ -280,6 +302,11 @@ const TakeTest: React.FC = () => {
     if (step !== 'test' || isTerminated) return;
 
     const handleFullscreenChange = () => {
+      if (isMobile) {
+        setIsFullscreen(true);
+        hasEnteredFullscreenRef.current = true;
+        return;
+      }
       const isFS = !!document.fullscreenElement;
       setIsFullscreen(isFS);
       
@@ -302,7 +329,7 @@ const TakeTest: React.FC = () => {
     return () => {
       document.removeEventListener('fullscreenchange', handleFullscreenChange);
     };
-  }, [step, isTerminated]);
+  }, [step, isTerminated, isMobile]);
 
   // Timer effect
   useEffect(() => {
@@ -604,6 +631,7 @@ const TakeTest: React.FC = () => {
   }
 
   const renderFullscreenOverlay = () => {
+    if (isMobile) return null;
     if (step === 'test' && !isFullscreen && !isTerminated && !submitting && !resultData) {
       return createPortal(
         <div className="fixed inset-0 z-[200] bg-black/95 backdrop-blur-md flex items-center justify-center p-6 text-white text-center">
