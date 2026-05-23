@@ -76,8 +76,12 @@ const InterviewAccess: React.FC = () => {
   };
 
   return (
-    <div className="access-screen flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 px-4 py-8">
-      <div className="access-container access-screen-card w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg text-center">
+    <ThemeProvider>
+      <div className="access-screen flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 px-4 py-8 relative">
+        <div className="absolute top-4 right-4 z-[10000]">
+          <DayNightToggle />
+        </div>
+        <div className="access-container access-screen-card w-full max-w-md p-8 space-y-6 bg-white dark:bg-gray-800 rounded-2xl shadow-lg text-center">
         <div className="access-screen-header">
           <p className="access-screen-kicker">Interview access</p>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Enter access code</h1>
@@ -130,6 +134,7 @@ const InterviewAccess: React.FC = () => {
         )}
       </div>
     </div>
+    </ThemeProvider>
   );
 };
 

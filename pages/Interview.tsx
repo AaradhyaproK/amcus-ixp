@@ -9,6 +9,7 @@ import { createPortal } from 'react-dom';
 import { LanguageSelector } from './LanguageSelector';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
+import DayNightToggle from '../components/DayNightToggle';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Setup PDF.js worker to enable PDF parsing
@@ -1456,14 +1457,9 @@ const CandidateInterviewFlow: React.FC = () => {
   // --- RENDER ---
   const Container = ({ children }: { children: React.ReactNode }) => (
     <div className="interview-flow-shell fixed inset-0 z-[9999] overflow-y-auto bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 flex flex-col items-center justify-start py-12 px-4 transition-colors duration-500">
-      <button 
-        onClick={toggleTheme}
-        className="absolute top-4 right-4 z-[10000] w-10 h-10 flex items-center justify-center rounded-xl bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-        title="Toggle Theme"
-      >
-        {theme === 'dark' ? <i className="fas fa-sun text-lg"></i> : <i className="fas fa-moon text-lg"></i>}
-      </button>
-      {children}
+      <div className="absolute top-4 right-4 z-[10000]">
+        <DayNightToggle />
+      </div>      {children}
     </div>
   );
 

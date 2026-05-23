@@ -6,6 +6,7 @@ import { InterviewSubmission } from '../types';
 import { useTheme } from '../context/ThemeContext';
 import { createPortal } from 'react-dom';
 import { jsPDF } from 'jspdf';
+import DayNightToggle from '../components/DayNightToggle';
 import { useMessageBox } from '../components/MessageBox';
 import { ArrowLeft, Download, Share2, User, FileText, MessageSquare, Brain, Shield, Video, CheckCircle, XCircle, Briefcase, MapPin, GraduationCap, DollarSign, Calendar, Award, Link as LinkIcon } from 'lucide-react';
 
@@ -675,9 +676,9 @@ const InterviewReport: React.FC = () => {
                     </a>
                 </div>
                 <div className="flex items-center gap-3">
-                    <button 
-                        onClick={handleShare}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-white/10 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-white/20 transition-all shadow-sm"
+                    <DayNightToggle />
+                    <button
+                        onClick={handleShare}                        className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-white/10 text-gray-700 dark:text-gray-200 border border-gray-200 dark:border-white/10 rounded-lg font-semibold hover:bg-gray-50 dark:hover:bg-white/20 transition-all shadow-sm"
                         title="Copy Report Link"
                     >
                         <LinkIcon size={16} /> Copy Link

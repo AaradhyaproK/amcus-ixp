@@ -4,6 +4,7 @@ import { collection, query, onSnapshot, orderBy, doc, getDoc, where } from 'fire
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import DayNightToggle from '../components/DayNightToggle';
 
 const ClientView: React.FC = () => {
   const { theme, setTheme } = useTheme();
@@ -107,13 +108,7 @@ const ClientView: React.FC = () => {
                     <div className="px-4 py-1.5 bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 font-bold rounded-full text-sm flex items-center gap-2">
                         <i className="fas fa-check-circle"></i> {submissions.length} Shortlisted
                     </div>
-                    <button
-                        onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
-                        className="w-10 h-10 flex items-center justify-center rounded-full bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-white/20 transition-colors"
-                        title="Toggle Theme"
-                    >
-                        {theme === 'dark' ? <i className="fas fa-sun"></i> : <i className="fas fa-moon"></i>}
-                    </button>
+                    <DayNightToggle />
                 </div>
             </div>
         </div>
