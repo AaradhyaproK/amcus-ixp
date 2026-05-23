@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
+import { ThemeProvider } from '../context/ThemeContext';
 import { Interview } from '../types';
+import DayNightToggle from '../components/DayNightToggle';
 import gsap from 'gsap';
 
 const InterviewAccess: React.FC = () => {
