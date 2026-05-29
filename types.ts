@@ -150,6 +150,11 @@ export interface InterviewSubmission {
   transcriptTexts?: Array<string | null>;
   candidateResumeURL?: string;
   status?: 'Shortlist' | 'Reject' | 'Hold';
+  visibilitySettings?: {
+    hiddenVideos?: Record<string, boolean>;
+    hiddenQuestions?: Record<string, boolean>;
+  };
+  clientAccessExpiresAt?: any;
 }
 
 export interface InterviewState {

@@ -5,6 +5,7 @@ import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useMessageBox } from '../components/MessageBox';
+import { useTheme } from '../context/ThemeContext';
 
 const InterviewResponses: React.FC = () => {
   const messageBox = useMessageBox();
@@ -19,6 +20,86 @@ const InterviewResponses: React.FC = () => {
   const [recruiterProfile, setRecruiterProfile] = useState<any>(null);
 
   const { user, userProfile } = useAuth();
+  const { isDark } = useTheme();
+  const [globalExpiry, setGlobalExpiry] = useState<any>(null);
+
+  useEffect(() => {
+    if (!interviewId) return;
+    getDoc(doc(db, 'interviews', interviewId)).then(snap => {
+      if (snap.exists()) {
+        setGlobalExpiry(snap.data().clientAccessExpiresAt || null);
+      }
+    }).catch(err => console.error("Error loading interview details:", err));
+  }, [interviewId]);
+
+  const getExpirationDate = (field: any): Date | null => {
+    if (!field) return null;
+    if (field.toDate) return field.toDate();
+    if (field instanceof Date) return field;
+    return new Date(field);
+  };
+
+  const formatDatetimeLocal = (date: Date | null) => {
+    if (!date) return '';
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
+
+  const handleSetGlobalExpiry = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!interviewId) return;
+    try {
+      const dateVal = val ? new Date(val) : null;
+      const interviewRef = doc(db, 'interviews', interviewId);
+      
+      // Update Interview Document
+      await updateDoc(interviewRef, { clientAccessExpiresAt: dateVal });
+      setGlobalExpiry(dateVal);
+      
+      // Batch update all currently loaded attempts/submissions in state
+      if (submissions.length > 0) {
+        const promises = submissions.map(sub => {
+          const attemptRef = doc(db, 'interviews', interviewId, 'attempts', sub.id);
+          return updateDoc(attemptRef, { clientAccessExpiresAt: dateVal });
+        });
+        await Promise.all(promises);
+      }
+      
+      messageBox.showSuccess(dateVal ? `Global expiration set to ${dateVal.toLocaleString()} for all reports.` : "Global expiration removed.");
+    } catch (err) {
+      console.error("Error setting global expiration:", err);
+      messageBox.showError("Failed to update global expiration.");
+    }
+  };
+
+  const handleClearGlobalExpiry = async () => {
+    if (!interviewId) return;
+    try {
+      const interviewRef = doc(db, 'interviews', interviewId);
+      
+      // Update Interview Document
+      await updateDoc(interviewRef, { clientAccessExpiresAt: null });
+      setGlobalExpiry(null);
+      
+      // Clear expiry on all currently loaded attempts
+      if (submissions.length > 0) {
+        const promises = submissions.map(sub => {
+          const attemptRef = doc(db, 'interviews', interviewId, 'attempts', sub.id);
+          return updateDoc(attemptRef, { clientAccessExpiresAt: null });
+        });
+        await Promise.all(promises);
+      }
+      
+      messageBox.showSuccess("Global expiration removed from all reports.");
+    } catch (err) {
+      console.error("Error clearing global expiration:", err);
+      messageBox.showError("Failed to clear global expiration.");
+    }
+  };
 
   useEffect(() => {
     if (user?.uid) {
@@ -328,6 +409,59 @@ const InterviewResponses: React.FC = () => {
             <i className="fas fa-share-alt"></i> Share Shortlisted Profiles
           </button>
         </div>
+      </div>
+
+      {/* Global Reports Expiration Picker */}
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-5 bg-gradient-to-r from-primary/5 to-purple-500/5 rounded-2xl border border-primary/10 shadow-sm text-sm">
+          <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary shrink-0">
+                  <i className="fas fa-history text-lg"></i>
+              </div>
+              <div>
+                  <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                      Global Client Access Expiration
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      Setting this restricts how long clients can access any report links generated for this job role.
+                  </p>
+              </div>
+          </div>
+          <div 
+              onClick={(e) => {
+                  const input = e.currentTarget.querySelector('input');
+                  if (input) {
+                      try { input.showPicker(); } catch (err) {}
+                  }
+              }}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-sm self-stretch md:self-auto justify-center transition-all duration-300 border cursor-pointer ${
+                  globalExpiry 
+                      ? 'bg-primary/5 border-primary/30 text-primary focus-within:border-primary/50' 
+                      : 'bg-white dark:bg-black/50 border-gray-200 dark:border-slate-700 focus-within:border-gray-400 dark:focus-within:border-slate-500'
+              }`}
+          >
+              <input
+                  type="datetime-local"
+                  value={formatDatetimeLocal(getExpirationDate(globalExpiry))}
+                  onChange={handleSetGlobalExpiry}
+                  className="bg-transparent border-none text-xs font-extrabold text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer focus:ring-0 p-0 text-center hover:opacity-85 transition-opacity"
+                  style={{ 
+                      minWidth: '160px',
+                      colorScheme: isDark ? 'dark' : 'light'
+                  }}
+              />
+              {globalExpiry && (
+                  <button 
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          handleClearGlobalExpiry();
+                      }}
+                      className="text-[11px] text-red-500 hover:text-red-600 font-bold ml-2 hover:underline cursor-pointer border-l border-primary/20 dark:border-slate-700 pl-3"
+                      title="Remove global expiration limit"
+                  >
+                      Clear Expiry
+                  </button>
+              )}
+          </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-2 p-3 bg-gray-100 dark:bg-slate-800/50 rounded-xl border border-gray-200 dark:border-slate-700">

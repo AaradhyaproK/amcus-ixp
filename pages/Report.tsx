@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { InterviewSubmission } from '../types';
 import { useTheme } from '../context/ThemeContext';
+import { useAuth } from '../context/AuthContext';
 import { createPortal } from 'react-dom';
 import { jsPDF } from 'jspdf';
 import DayNightToggle from '../components/DayNightToggle';
 import { useMessageBox } from '../components/MessageBox';
-import { ArrowLeft, Download, Share2, User, FileText, MessageSquare, Brain, Shield, Video, CheckCircle, XCircle, Briefcase, MapPin, GraduationCap, DollarSign, Calendar, Award, Link as LinkIcon } from 'lucide-react';
+import { ArrowLeft, Download, Share2, User, FileText, MessageSquare, Brain, Shield, Video, VideoOff, Eye, EyeOff, CheckCircle, XCircle, Briefcase, MapPin, GraduationCap, DollarSign, Calendar, Award, Link as LinkIcon } from 'lucide-react';
 
 // New component for radial score display
 const ScoreCircle: React.FC<{ score: number; denom: number; color: 'green' | 'yellow' | 'red'; label: string }> = ({ score, denom, color, label }) => {
@@ -104,6 +105,7 @@ const InterviewReport: React.FC = () => {
   const navigate = useNavigate();
   const messageBox = useMessageBox();
   const { isDark } = useTheme();
+  const { userProfile } = useAuth();
   const { interviewId, submissionId } = useParams<{ interviewId: string; submissionId?: string }>();
   const [submission, setSubmission] = useState<InterviewSubmission | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,6 +115,142 @@ const InterviewReport: React.FC = () => {
   const [showResumeInVideo, setShowResumeInVideo] = useState<boolean>(false);
   const [isCompareMode, setIsCompareMode] = useState(false);
 
+  const isStaff = userProfile?.role === 'recruiter' || userProfile?.role === 'admin';
+
+  const getExpirationDate = (field: any): Date | null => {
+    if (!field) return null;
+    if (field.toDate) return field.toDate();
+    if (field instanceof Date) return field;
+    return new Date(field);
+  };
+
+  const formatDatetimeLocal = (date: Date | null) => {
+    if (!date) return '';
+    const yyyy = date.getFullYear();
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    const hh = String(date.getHours()).padStart(2, '0');
+    const min = String(date.getMinutes()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+  };
+
+  const handleSetExpiration = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    if (!interviewId || !submissionId || !submission) return;
+    try {
+      const docRef = doc(db, 'interviews', interviewId, 'attempts', submissionId);
+      const dateVal = val ? new Date(val) : null;
+      
+      setSubmission(prev => prev ? {
+        ...prev,
+        clientAccessExpiresAt: dateVal
+      } : null);
+      
+      await updateDoc(docRef, { clientAccessExpiresAt: dateVal });
+      messageBox.showSuccess(dateVal ? `Access expiration set to ${dateVal.toLocaleString()}` : "Access expiration removed.");
+    } catch (err) {
+      console.error("Error setting expiration:", err);
+      messageBox.showError("Failed to update access expiration.");
+    }
+  };
+
+  const handleClearExpiration = async () => {
+    if (!interviewId || !submissionId || !submission) return;
+    try {
+      const docRef = doc(db, 'interviews', interviewId, 'attempts', submissionId);
+      
+      setSubmission(prev => prev ? {
+        ...prev,
+        clientAccessExpiresAt: null
+      } : null);
+      
+      await updateDoc(docRef, { clientAccessExpiresAt: null });
+      messageBox.showSuccess("Access expiration limit removed.");
+    } catch (err) {
+      console.error("Error clearing expiration:", err);
+      messageBox.showError("Failed to clear access expiration.");
+    }
+  };
+
+  const handleToggleVisibility = async (index: number, field: 'hiddenVideos' | 'hiddenQuestions', isHidden: boolean) => {
+    if (!interviewId || !submissionId || !submission) return;
+    try {
+      const docRef = doc(db, 'interviews', interviewId, 'attempts', submissionId);
+      const currentSettings = submission.visibilitySettings || {};
+      const fieldSettings = currentSettings[field] || {};
+      
+      const updatedSettings = {
+        ...currentSettings,
+        [field]: {
+          ...fieldSettings,
+          [index]: isHidden
+        }
+      };
+      
+      // Optimistic update
+      setSubmission(prev => prev ? {
+        ...prev,
+        visibilitySettings: updatedSettings
+      } : null);
+      
+      await updateDoc(docRef, { visibilitySettings: updatedSettings });
+      messageBox.showSuccess("Visibility settings updated successfully!");
+    } catch (err) {
+      console.error("Error updating visibility setting:", err);
+      messageBox.showError("Failed to update visibility setting.");
+    }
+  };
+
+  const hasPrevVisibleVideo = () => {
+    if (activeVideoIndex === null || !submission) return false;
+    let idx = activeVideoIndex - 1;
+    while (idx >= 0) {
+      const isHidden = !isStaff && submission.visibilitySettings?.hiddenQuestions?.[idx] === true;
+      if (submission.videoURLs?.[idx] && !isHidden) return true;
+      idx--;
+    }
+    return false;
+  };
+
+  const hasNextVisibleVideo = () => {
+    if (activeVideoIndex === null || !submission || !submission.questions) return false;
+    let idx = activeVideoIndex + 1;
+    while (idx < submission.questions.length) {
+      const isHidden = !isStaff && submission.visibilitySettings?.hiddenQuestions?.[idx] === true;
+      if (submission.videoURLs?.[idx] && !isHidden) return true;
+      idx++;
+    }
+    return false;
+  };
+
+  const handlePrevVideo = () => {
+    if (activeVideoIndex === null || !submission) return;
+    let newIndex = activeVideoIndex - 1;
+    while (newIndex >= 0) {
+      const isHidden = !isStaff && submission.visibilitySettings?.hiddenQuestions?.[newIndex] === true;
+      const hasUrl = submission.videoURLs?.[newIndex];
+      if (hasUrl && !isHidden) {
+        setActiveVideoIndex(newIndex);
+        return;
+      }
+      newIndex--;
+    }
+  };
+
+  const handleNextVideo = () => {
+    if (activeVideoIndex === null || !submission || !submission.questions) return;
+    let newIndex = activeVideoIndex + 1;
+    while (newIndex < submission.questions.length) {
+      const isHidden = !isStaff && submission.visibilitySettings?.hiddenQuestions?.[newIndex] === true;
+      const hasUrl = submission.videoURLs?.[newIndex];
+      if (hasUrl && !isHidden) {
+        setActiveVideoIndex(newIndex);
+        return;
+      }
+      newIndex++;
+    }
+  };
+
   useEffect(() => {
     const fetchSubmission = async () => {
       if (!interviewId) return;
@@ -121,7 +259,18 @@ const InterviewReport: React.FC = () => {
           const docRef = doc(db, 'interviews', interviewId, 'attempts', submissionId);
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
-            setSubmission({ id: docSnap.id, ...docSnap.data() } as InterviewSubmission);
+            const submissionData = { id: docSnap.id, ...docSnap.data() } as InterviewSubmission;
+            
+            // Fallback check to global interview expiration if local is not set
+            const interviewDocSnap = await getDoc(doc(db, 'interviews', interviewId));
+            if (interviewDocSnap.exists()) {
+              const interviewData = interviewDocSnap.data();
+              if (!submissionData.clientAccessExpiresAt && interviewData.clientAccessExpiresAt) {
+                submissionData.clientAccessExpiresAt = interviewData.clientAccessExpiresAt;
+              }
+            }
+            
+            setSubmission(submissionData);
           }
         } else {
           // Legacy: The report is embedded directly on the interview document
@@ -463,8 +612,16 @@ const InterviewReport: React.FC = () => {
 
         // 7. Q&A TRANSCRIPTS
         if (submission.questions && submission.questions.length > 0) {
-            drawSectionHeader("Interview Transcript");
+            let renderedHeader = false;
             submission.questions.forEach((q, idx) => {
+                const isQuestionHidden = submission.visibilitySettings?.hiddenQuestions?.[idx] === true;
+                if (isQuestionHidden) return; // Skip hidden questions!
+
+                if (!renderedHeader) {
+                    drawSectionHeader("Interview Transcript");
+                    renderedHeader = true;
+                }
+
                 const transcript = submission.transcriptTexts?.[idx] || 'Transcript not available.';
                 const qLines = pdf.splitTextToSize(`Q${idx + 1}: ${q}`, contentW);
                 const tLines = pdf.splitTextToSize(transcript, contentW - 10);
@@ -631,6 +788,42 @@ const InterviewReport: React.FC = () => {
     );
   }
 
+  // Check if client access has expired
+  const expirationDateObj = getExpirationDate(submission.clientAccessExpiresAt);
+  if (!isStaff && expirationDateObj && new Date() > expirationDateObj) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-3xl p-8 text-center shadow-xl backdrop-blur-md relative overflow-hidden">
+              <div className="absolute -top-10 -left-10 w-40 h-40 bg-red-500/10 rounded-full blur-3xl"></div>
+              <div className="absolute -bottom-10 -right-10 w-40 h-40 bg-primary/10 rounded-full blur-3xl"></div>
+              
+              <div className="w-16 h-16 bg-red-50 dark:bg-red-950/20 text-red-500 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-sm border border-red-100 dark:border-red-900/30">
+                  <Shield size={32} />
+              </div>
+              
+              <h1 className="text-2xl font-black text-gray-900 dark:text-white mb-3">Client Access Expired</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 leading-relaxed">
+                  This candidate report link has expired. The recruiter set an access time limit which has passed. 
+                  Please reach out to the recruiter if you need to extend access.
+              </p>
+              
+              <div className="bg-primary/5 border border-primary/10 rounded-2xl p-4 mb-6 text-sm text-primary font-semibold flex items-center justify-center gap-2 max-w-sm mx-auto shadow-sm">
+                  <i className="fas fa-phone-alt"></i>
+                  <span>Contact to extend access: <a href="tel:+917559305823" className="hover:underline font-bold">+91 75593 05823</a></span>
+              </div>
+              
+              <div className="text-xs font-semibold text-gray-400 bg-gray-50 dark:bg-black/20 py-2 px-4 rounded-xl border border-gray-100 dark:border-white/5 w-max mx-auto mb-6">
+                  Expired on: {expirationDateObj.toLocaleString()}
+              </div>
+              
+              <a href="https://interviewxpert.in" className="inline-block px-6 py-2.5 bg-primary text-primary-foreground font-bold rounded-xl text-sm hover:bg-primary-dark transition-colors shadow-sm">
+                  Go to InterviewXpert
+              </a>
+          </div>
+      </div>
+    );
+  }
+
   const { 
       summary, 
       roleFit, 
@@ -722,6 +915,47 @@ const InterviewReport: React.FC = () => {
                     </div>
                 </div>
                 <div className="flex flex-wrap gap-3 items-center justify-end">
+                    {isStaff && (
+                        <div 
+                            onClick={(e) => {
+                                const input = e.currentTarget.querySelector('input');
+                                if (input) {
+                                    try { input.showPicker(); } catch (err) {}
+                                }
+                            }}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl shadow-sm text-sm font-semibold transition-all duration-300 border cursor-pointer ${
+                                submission.clientAccessExpiresAt 
+                                    ? 'bg-primary/5 border-primary/30 text-primary focus-within:border-primary/50' 
+                                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-white/5 dark:hover:bg-white/10 border-gray-200 dark:border-white/10 focus-within:border-gray-400 dark:focus-within:border-white/30'
+                            }`}
+                        >
+                            <span className="text-xs font-bold text-gray-500 dark:text-gray-400 flex items-center gap-1.5 whitespace-nowrap">
+                                <Calendar size={14} className={submission.clientAccessExpiresAt ? "text-primary animate-pulse" : "text-gray-400 dark:text-gray-500"} /> Client Access Expires:
+                            </span>
+                            <input
+                                type="datetime-local"
+                                value={formatDatetimeLocal(getExpirationDate(submission.clientAccessExpiresAt))}
+                                onChange={handleSetExpiration}
+                                className="bg-transparent border-none text-xs font-extrabold text-gray-800 dark:text-gray-200 focus:outline-none cursor-pointer focus:ring-0 p-0 text-center hover:opacity-85 transition-opacity"
+                                style={{ 
+                                    minWidth: '160px',
+                                    colorScheme: isDark ? 'dark' : 'light'
+                                }}
+                            />
+                            {submission.clientAccessExpiresAt && (
+                                <button 
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleClearExpiration();
+                                    }}
+                                    className="text-[11px] text-red-500 hover:text-red-600 font-bold ml-1.5 hover:underline cursor-pointer border-l border-primary/20 dark:border-white/15 pl-2"
+                                    title="Remove expiration limit"
+                                >
+                                    Clear
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {submission.candidateResumeURL && !submission.candidateResumeURL.startsWith('data:text/plain') && (
                         <button onClick={() => setIsCompareMode(!isCompareMode)} className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${isCompareMode ? 'bg-primary/10 text-primary border-primary/30' : 'bg-white dark:bg-white/5 text-gray-700 dark:text-gray-200 border-gray-200 dark:border-white/10 hover:bg-gray-50 dark:hover:bg-white/10'}`}>
                             <FileText size={16} /> {isCompareMode ? 'Exit Compare Mode' : 'Compare Resume'}
@@ -986,51 +1220,110 @@ const InterviewReport: React.FC = () => {
             <div className="bg-white dark:bg-white/5 rounded-2xl p-6 border border-gray-200 dark:border-white/10 shadow-sm">
                 <h2 className="text-xl font-bold mb-4 flex items-center gap-3"><Video size={20} className="text-primary"/> Question & Answer Insights</h2>
                 <div className="space-y-6">
-                    {submission.questions?.map((q, index) => (
-                        <div key={index} className="flex flex-col lg:flex-row gap-6 p-5 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-white/5">
-                            {/* Video side */}
-                            <div className="w-full lg:w-80 flex-shrink-0 flex flex-col justify-between">
-                                <p className="font-bold text-gray-900 dark:text-white mb-3 flex items-start gap-2">
-                                    <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-md">Q{index + 1}</span> 
-                                    <span>{q}</span>
-                                </p>
-                                {submission.videoURLs?.[index] ? (
-                                    <div 
-                                        className="relative group aspect-video bg-gray-900 rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-lg transition-shadow"
-                                        onClick={() => setActiveVideoIndex(index)}
-                                    >
-                                        <video src={submission.videoURLs[index]} className="w-full h-full object-cover opacity-70 group-hover:opacity-60 transition-opacity" />
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                            <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-transform shadow-lg border border-white/30">
-                                                <i className="fas fa-play ml-1 text-lg"></i>
-                                            </div>
-                                        </div>
-                                        <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md">
-                                            Play Recording
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <div className="aspect-video bg-gray-200 dark:bg-white/5 rounded-xl flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700">
-                                        <Video size={24} className="mb-2 opacity-50" />
-                                        <p className="text-sm font-medium">No Recording</p>
+                    {submission.questions?.map((q, index) => {
+                        const isQuestionHidden = submission.visibilitySettings?.hiddenQuestions?.[index] === true;
+
+                        // For clients: if recruiter hid this question entirely, do not render it
+                        if (!isStaff && isQuestionHidden) return null;
+
+                        // Staff sees it always, or if it has a video and is not hidden
+                        const showVideoSection = !!submission.videoURLs?.[index];
+
+                        return (
+                            <div key={index} className="flex flex-col lg:flex-row gap-6 p-5 bg-gray-50 dark:bg-black/20 rounded-2xl border border-gray-100 dark:border-white/5 relative group transition-all duration-300">
+                                
+                                {/* Recruiter Visibility Controls Banner */}
+                                {isStaff && (
+                                    <div className="absolute top-4 right-4 flex items-center gap-3 bg-white/80 dark:bg-[#111]/80 backdrop-blur-md px-3.5 py-2 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm z-10">
+                                        <span className="text-[10px] font-bold text-gray-400 dark:text-gray-500 flex items-center gap-1 uppercase tracking-wider">
+                                            <Shield size={10} /> Client View:
+                                        </span>
+                                        
+                                        {/* Q&A Visibility Switch */}
+                                        <button
+                                            onClick={() => handleToggleVisibility(index, 'hiddenQuestions', !isQuestionHidden)}
+                                            className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg border transition-all cursor-pointer shadow-sm ${
+                                                !isQuestionHidden 
+                                                    ? 'text-green-700 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800/30 hover:bg-green-100 dark:hover:bg-green-950/40' 
+                                                    : 'text-red-600 bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-800/30 hover:bg-red-100 dark:hover:bg-red-950/40'
+                                            }`}
+                                            title={!isQuestionHidden ? "Click to hide entire question & video from client" : "Click to show question & video to client"}
+                                        >
+                                            {!isQuestionHidden ? (
+                                                <>
+                                                    <Eye size={12} className="text-green-600 dark:text-green-400" /> Visible to Client
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <EyeOff size={12} className="text-red-500" /> Hidden from Client
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
                                 )}
-                            </div>
-                            {/* Q&A Side */}
-                            <div className="flex-1 flex flex-col">
-                                <div className="flex-1 bg-white dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10 h-full flex flex-col">
-                                    <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                                        <FileText size={14} /> Transcript / Answer
-                                    </h4>
-                                    <div className="flex-1">
-                                        <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
-                                            {submission.transcriptTexts?.[index] || 'Transcript not available for this question.'}
+
+                                {/* Video side */}
+                                {showVideoSection && (
+                                    <div className={`w-full lg:w-80 flex-shrink-0 flex flex-col justify-between relative ${isStaff && isQuestionHidden ? 'opacity-65' : ''}`}>
+                                        <p className="font-bold text-gray-900 dark:text-white mb-3 flex items-start gap-2 pr-32 lg:pr-0">
+                                            <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-md">Q{index + 1}</span> 
+                                            <span>{q}</span>
                                         </p>
+                                        
+                                        {submission.videoURLs?.[index] ? (
+                                            <div 
+                                                className="relative group aspect-video bg-gray-900 rounded-xl overflow-hidden cursor-pointer shadow-md hover:shadow-lg transition-all duration-300 border border-gray-800/20 dark:border-white/5"
+                                                onClick={() => setActiveVideoIndex(index)}
+                                            >
+                                                <video src={submission.videoURLs[index]} className="w-full h-full object-cover opacity-75 group-hover:opacity-60 transition-opacity" />
+                                                <div className="absolute inset-0 flex items-center justify-center">
+                                                    <div className="w-12 h-12 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center text-white group-hover:scale-110 transition-transform shadow-lg border border-white/30">
+                                                        <i className="fas fa-play ml-1 text-lg"></i>
+                                                    </div>
+                                                </div>
+                                                <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm text-white text-[10px] px-2 py-0.5 rounded-md font-bold uppercase tracking-wider">
+                                                    Play Recording
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="aspect-video bg-gray-200 dark:bg-white/5 rounded-xl flex flex-col items-center justify-center text-gray-500 dark:text-gray-400 border border-dashed border-gray-300 dark:border-gray-700">
+                                                <Video size={24} className="mb-2 opacity-50" />
+                                                <p className="text-sm font-medium">No Recording</p>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Q&A Side */}
+                                <div className={`flex-1 flex flex-col ${isStaff && isQuestionHidden ? 'opacity-50' : ''}`}>
+                                    {/* Render the question here if video section is completely hidden */}
+                                    {!showVideoSection && (
+                                        <p className="font-bold text-gray-900 dark:text-white mb-3 flex items-start gap-2 pr-32 lg:pr-0">
+                                            <span className="bg-primary text-primary-foreground text-xs px-2 py-1 rounded-md">Q{index + 1}</span> 
+                                            <span>{q}</span>
+                                        </p>
+                                    )}
+                                    
+                                    {isStaff && isQuestionHidden && (
+                                        <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-[10px] py-1.5 px-3 rounded-lg mb-3 font-bold uppercase tracking-wider flex items-center gap-1.5 backdrop-blur-sm w-fit">
+                                            <EyeOff size={12} /> Entire Q&A block is hidden from client
+                                        </div>
+                                    )}
+                                    
+                                    <div className="flex-1 bg-white dark:bg-white/5 rounded-xl p-4 border border-gray-200 dark:border-white/10 h-full flex flex-col">
+                                        <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+                                            <FileText size={14} /> Transcript / Answer
+                                        </h4>
+                                        <div className="flex-1">
+                                            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap leading-relaxed">
+                                                {submission.transcriptTexts?.[index] || 'Transcript not available for this question.'}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                     {(!submission.questions || submission.questions.length === 0) && (
                         <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                             No questions found for this interview submission.
@@ -1182,15 +1475,15 @@ const InterviewReport: React.FC = () => {
                         <div className="flex items-center gap-3">
                             <div className="flex items-center gap-2 mr-4 border-r border-white/10 pr-4">
                                 <button 
-                                    disabled={activeVideoIndex === 0}
-                                    onClick={() => setActiveVideoIndex(prev => prev !== null && prev > 0 ? prev - 1 : prev)}
+                                    disabled={!hasPrevVisibleVideo()}
+                                    onClick={handlePrevVideo}
                                     className="px-3 py-1.5 bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
                                 >
                                     <ArrowLeft size={14} /> Prev
                                 </button>
                                 <button 
-                                    disabled={activeVideoIndex === (submission.questions?.length || 1) - 1}
-                                    onClick={() => setActiveVideoIndex(prev => prev !== null && prev < (submission.questions?.length || 1) - 1 ? prev + 1 : prev)}
+                                    disabled={!hasNextVisibleVideo()}
+                                    onClick={handleNextVideo}
                                     className="px-3 py-1.5 bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed hover:bg-white/20 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1"
                                 >
                                     Next <ArrowLeft size={14} className="rotate-180" />
