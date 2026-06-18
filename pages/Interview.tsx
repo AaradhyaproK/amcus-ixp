@@ -2480,27 +2480,37 @@ const ActiveInterviewSession: React.FC<{
                 ) : null}
               </svg>
 
-              {/* Centered Hologram Core */}
-              <div className={`relative w-14 h-14 md:w-20 md:h-20 rounded-full bg-slate-900 border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] z-20 transition-all duration-300 ${
+              {/* Centered Hologram Core with Recruiter Image */}
+              <div className={`relative w-16 h-16 md:w-22 md:h-22 rounded-full overflow-hidden border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] z-20 transition-all duration-300 ${
                 isSpeaking ? 'scale-105 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.5)]' : ''
               }`}>
-                {/* Custom animated equalizer bars inside the core when speaking */}
-                {isSpeaking ? (
-                  <div className="flex items-end gap-1 h-6 md:h-8">
-                    <span className="w-1 bg-blue-400 rounded-full animate-[soundbar_0.8s_ease-in-out_infinite]" style={{ height: '30%' }}></span>
-                    <span className="w-1 bg-blue-300 rounded-full animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]" style={{ height: '70%' }}></span>
-                    <span className="w-1 bg-purple-400 rounded-full animate-[soundbar_0.7s_ease-in-out_infinite_0.3s]" style={{ height: '50%' }}></span>
-                    <span className="w-1 bg-purple-300 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '90%' }}></span>
-                    <span className="w-1 bg-blue-400 rounded-full animate-[soundbar_0.9s_ease-in-out_infinite_0.4s]" style={{ height: '40%' }}></span>
-                  </div>
-                ) : (
-                  <div className="relative w-8 h-8 md:w-10 md:h-10 flex items-center justify-center">
-                    {/* Breathing AI core symbol */}
-                    <div className="absolute inset-0 rounded-full border border-blue-500/30 animate-ping opacity-30"></div>
-                    <i className="fas fa-robot text-lg md:text-xl text-blue-400 animate-pulse"></i>
-                  </div>
-                )}
+                <img 
+                  src="/recruiter_avatar.png" 
+                  alt="AI Recruiter" 
+                  className={`w-full h-full object-cover transition-transform duration-300 ${isSpeaking ? 'scale-105' : 'scale-100'}`} 
+                />
               </div>
+            </div>
+
+            {/* Small speech frequency wave bars under avatar */}
+            <div className="h-4 flex items-end gap-0.5 mt-2.5 z-10">
+              {isSpeaking ? (
+                <>
+                  <span className="w-0.5 bg-blue-400 rounded-full animate-[soundbar_0.8s_ease-in-out_infinite]" style={{ height: '40%' }}></span>
+                  <span className="w-0.5 bg-blue-300 rounded-full animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]" style={{ height: '80%' }}></span>
+                  <span className="w-0.5 bg-purple-400 rounded-full animate-[soundbar_0.7s_ease-in-out_infinite_0.3s]" style={{ height: '50%' }}></span>
+                  <span className="w-0.5 bg-purple-300 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '100%' }}></span>
+                  <span className="w-0.5 bg-blue-400 rounded-full animate-[soundbar_0.9s_ease-in-out_infinite_0.4s]" style={{ height: '30%' }}></span>
+                </>
+              ) : (
+                <div className="flex gap-0.5">
+                  <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+                  <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+                  <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+                  <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+                  <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+                </div>
+              )}
             </div>
 
             {/* Speaking/Listening Status Indicator */}
@@ -2513,7 +2523,7 @@ const ActiveInterviewSession: React.FC<{
                 <span className={`w-1.5 h-1.5 rounded-full ${isSpeaking ? 'bg-blue-400 animate-ping' : 'bg-emerald-400'}`}></span>
                 {isSpeaking ? 'AI Speaking' : 'Listening...'}
               </span>
-              <p className="text-[10px] md:text-xs text-slate-400 mt-1.5 font-bold uppercase tracking-widest">AI Interviewer</p>
+              <p className="text-[10px] md:text-xs text-slate-400 mt-1.5 font-bold uppercase tracking-widest">AI Recruiter</p>
             </div>
           </div>
 
