@@ -16,7 +16,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
 
 // --- Types ---
-type WizardStep = 'validating' | 'collect-info' | 'show-jd' | 'instructions' | 'setup' | 'interview' | 'processing' | 'finish';
+type WizardStep = 'validating' | 'welcome' | 'enter-code' | 'collect-info' | 'show-jd' | 'instructions' | 'setup' | 'interview' | 'processing' | 'finish';
 type CandidateInfo = { 
   name: string; 
   email: string; 
@@ -1214,6 +1214,21 @@ const InterviewReadinessOnboarding: React.FC<{
                   <div key={point} className="readiness-summary-item">{point}</div>
                 ))}
               </div>
+
+              {/* YouTube video guide */}
+              <div className="mt-6 w-full flex flex-col items-center justify-center">
+                <div className="relative w-full max-w-xl aspect-video rounded-2xl overflow-hidden shadow-lg border border-gray-200 dark:border-white/10 bg-black">
+                  <iframe 
+                    className="absolute top-0 left-0 w-full h-full"
+                    src="https://www.youtube.com/embed/9UhI3l23OLg?si=t-y4dcjI0sO0ADpC&autoplay=1&mute=1" 
+                    title="YouTube video player" 
+                    frameBorder="0" 
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+                    referrerPolicy="strict-origin-when-cross-origin" 
+                    allowFullScreen
+                  />
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -1239,6 +1254,262 @@ const InterviewReadinessOnboarding: React.FC<{
           </div>
         </div>
       </div>
+    </div>
+  );
+};
+
+// --- Welcome Screen Component with AI Avatar ---
+const InterviewWelcomeScreen: React.FC<{
+  interview: any;
+  onProceed: () => void;
+}> = ({ interview, onProceed }) => {
+  const [isSpeaking, setIsSpeaking] = useState(false);
+
+  useEffect(() => {
+    // Speak welcome message
+    const welcomeText = `Hello! Welcome to your AI interview for the role of ${interview.title}. I am your AI interviewer today. Let me explain the process. First, you will enter your details and upload your resume. Second, you will review the job description. Third, we will verify your hardware including camera, microphone, and internet. Finally, we will begin the interview where I will ask you questions one by one. Let's get started!`;
+    
+    const timeout = setTimeout(() => {
+      setIsSpeaking(true);
+      speak(welcomeText, {
+        onEnd: () => setIsSpeaking(false),
+        onError: () => setIsSpeaking(false),
+      });
+    }, 800);
+
+    return () => {
+      clearTimeout(timeout);
+      speak.stop();
+    };
+  }, [interview.title]);
+
+  return (
+    <div className="w-full max-w-3xl mx-auto px-4 py-6 text-center animate-in fade-in slide-in-from-bottom-6 duration-500">
+      {/* Hologram Avatar card */}
+      <div className="mb-8 max-w-sm mx-auto bg-slate-900 dark:bg-slate-950 rounded-2xl p-6 border border-gray-200/10 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center">
+        <style>{`
+          @keyframes soundbar {
+            0%, 100% { height: 20%; }
+            50% { height: 100%; }
+          }
+        `}</style>
+        
+        {/* Holographic scanning effect */}
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
+          backgroundImage: 'radial-gradient(circle, rgba(59,130,246,0.15) 1px, transparent 1px)',
+          backgroundSize: '16px 16px'
+        }}></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-purple-600/10 pointer-events-none"></div>
+
+        <div className="relative w-24 h-24 md:w-32 md:h-32 flex items-center justify-center">
+          <div className={`absolute inset-0 rounded-full border border-dashed border-blue-500/40 ${isSpeaking ? 'animate-spin' : 'animate-[spin_20s_linear_infinite]'} opacity-60`}></div>
+          <div className={`absolute inset-3 rounded-full border border-purple-500/20 bg-purple-500/5 transition-all duration-700 ${
+            isSpeaking ? 'scale-105 opacity-80 shadow-[0_0_25px_rgba(168,85,247,0.3)]' : 'scale-100 opacity-40 shadow-none'
+          }`}></div>
+
+          <svg className="absolute w-full h-full pointer-events-none z-10" viewBox="0 0 100 100">
+            <defs>
+              <linearGradient id="welcomeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stopColor="#3b82f6" />
+                <stop offset="100%" stopColor="#8b5cf6" />
+              </linearGradient>
+            </defs>
+            <circle cx="50" cy="50" r="32" fill="none" stroke="url(#welcomeGrad)" strokeWidth="1" strokeDasharray="5,15" className={`origin-center transition-all ${isSpeaking ? 'animate-[spin_4s_linear_infinite]' : 'animate-[spin_12s_linear_infinite]'}`} />
+            <circle cx="50" cy="50" r="28" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeDasharray="40,20" className={`origin-center transition-all ${isSpeaking ? 'animate-[spin_6s_linear_infinite_reverse] opacity-80' : 'animate-[spin_18s_linear_infinite_reverse] opacity-40'}`} />
+          </svg>
+
+          <div className={`relative w-14 h-14 md:w-18 md:h-18 rounded-full bg-slate-900 border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] z-20 transition-all duration-300 ${
+            isSpeaking ? 'scale-105 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.5)]' : ''
+          }`}>
+            {isSpeaking ? (
+              <div className="flex items-end gap-1 h-6 md:h-8">
+                <span className="w-1 bg-blue-400 rounded-full animate-[soundbar_0.8s_ease-in-out_infinite]" style={{ height: '30%' }}></span>
+                <span className="w-1 bg-blue-300 rounded-full animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]" style={{ height: '70%' }}></span>
+                <span className="w-1 bg-purple-400 rounded-full animate-[soundbar_0.7s_ease-in-out_infinite_0.3s]" style={{ height: '50%' }}></span>
+                <span className="w-1 bg-purple-300 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '90%' }}></span>
+              </div>
+            ) : (
+              <div className="relative w-8 h-8 flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border border-blue-500/30 animate-ping opacity-30"></div>
+                <i className="fas fa-robot text-lg text-blue-400 animate-pulse"></i>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 text-center z-10">
+          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all duration-300 ${
+            isSpeaking ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+          }`}>
+            <span className={`w-1.5 h-1.5 rounded-full ${isSpeaking ? 'bg-blue-400 animate-ping' : 'bg-emerald-400'}`}></span>
+            {isSpeaking ? 'AI speaking' : 'Standby'}
+          </span>
+        </div>
+      </div>
+
+      {/* Greeting and description */}
+      <h2 className="text-3xl font-extrabold text-gray-900 dark:text-white mb-2">
+        Let's Start Your AI Assessment!
+      </h2>
+      <p className="text-lg text-blue-600 dark:text-blue-400 font-bold mb-6">
+        Role: {interview.title}
+      </p>
+
+      {/* Process flow cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 text-left">
+        <div className="bg-white dark:bg-white/5 p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-all hover:scale-[1.02]">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-3">
+            <i className="fas fa-user-edit text-lg"></i>
+          </div>
+          <h4 className="text-sm font-extrabold text-gray-900 dark:text-white mb-1">1. Access Details</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Enter your information and upload your resume for the AI to analyze.</p>
+        </div>
+
+        <div className="bg-white dark:bg-white/5 p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-all hover:scale-[1.02]">
+          <div className="w-10 h-10 rounded-xl bg-purple-50 dark:bg-purple-950/40 text-purple-600 dark:text-purple-400 flex items-center justify-center mb-3">
+            <i className="fas fa-file-invoice text-lg"></i>
+          </div>
+          <h4 className="text-sm font-extrabold text-gray-900 dark:text-white mb-1">2. JD & Guidelines</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Review job responsibilities and standard rules of the assessment.</p>
+        </div>
+
+        <div className="bg-white dark:bg-white/5 p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-all hover:scale-[1.02]">
+          <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mb-3">
+            <i className="fas fa-video text-lg"></i>
+          </div>
+          <h4 className="text-sm font-extrabold text-gray-900 dark:text-white mb-1">3. System Check</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Verify your internet speed, microphone, and camera setup.</p>
+        </div>
+
+        <div className="bg-white dark:bg-white/5 p-5 rounded-2xl border border-gray-200 dark:border-white/10 shadow-sm transition-all hover:scale-[1.02]">
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mb-3">
+            <i className="fas fa-brain text-lg"></i>
+          </div>
+          <h4 className="text-sm font-extrabold text-gray-900 dark:text-white mb-1">4. Interview Session</h4>
+          <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">Face our interactive AI, answer questions, and submit your responses.</p>
+        </div>
+      </div>
+
+      {/* JD description summary */}
+      {interview.description && (
+        <div className="bg-blue-50/30 dark:bg-blue-950/10 rounded-2xl border border-blue-100/50 dark:border-blue-900/20 p-5 mb-8 text-left max-h-[160px] overflow-y-auto custom-scrollbar">
+          <h4 className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-widest mb-2 flex items-center gap-1.5">
+            <i className="fas fa-briefcase"></i> Job Overview
+          </h4>
+          <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed line-clamp-3 select-none">
+            {interview.description}
+          </p>
+        </div>
+      )}
+
+      {/* Button to proceed */}
+      <button 
+        onClick={onProceed}
+        className="px-10 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold rounded-2xl shadow-xl shadow-blue-500/25 hover:shadow-blue-500/35 hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center gap-2 mx-auto"
+      >
+        <span>Start Onboarding</span>
+        <i className="fas fa-arrow-right"></i>
+      </button>
+    </div>
+  );
+};
+
+// --- Access Code Verification Component ---
+const AccessCodeVerificationScreen: React.FC<{
+  interviewId: string;
+  initialToken: string;
+  onSuccess: () => void;
+}> = ({ interviewId, initialToken, onSuccess }) => {
+  const [token, setToken] = useState(initialToken);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleVerify = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!token.trim()) {
+      setError("Please enter a valid access code.");
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const tokenDocRef = doc(db, 'interviewAccessTokens', token.trim());
+      const tokenDoc = await getDoc(tokenDocRef);
+
+      if (!tokenDoc.exists()) {
+        throw new Error("Invalid or expired access code. Please check the code sent to your email.");
+      }
+
+      const tokenData = tokenDoc.data();
+      if (tokenData.isUsed) {
+        throw new Error("This access code has already been used. Please contact your recruiter.");
+      }
+
+      if (tokenData.nextInterviewId !== interviewId) {
+        throw new Error("This access code is not valid for this assessment.");
+      }
+
+      // Mark token as used
+      await updateDoc(tokenDocRef, { isUsed: true, usedAt: serverTimestamp() });
+      
+      onSuccess();
+    } catch (err: any) {
+      setError(err.message || "Failed to verify access code.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="w-full max-w-md mx-auto px-4 py-8 bg-white dark:bg-gray-800/60 rounded-3xl border border-gray-200 dark:border-gray-700/50 shadow-xl text-center animate-in fade-in slide-in-from-bottom-6 duration-500">
+      <div className="w-14 h-14 rounded-2xl bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 flex items-center justify-center mb-4 mx-auto">
+        <i className="fas fa-key text-2xl"></i>
+      </div>
+
+      <h3 className="text-xl font-extrabold text-gray-900 dark:text-white mb-2">Access Code Verification</h3>
+      <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+        This assessment is private. Please enter the unique access code sent to your email to proceed.
+      </p>
+
+      {error && (
+        <div className="mb-4 p-3.5 bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-800/50 rounded-xl text-xs font-semibold leading-relaxed">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleVerify} className="space-y-4">
+        <div className="text-left">
+          <label className="block text-xs font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 mb-1.5">Access Code</label>
+          <input 
+            type="text" 
+            value={token}
+            onChange={(e) => setToken(e.target.value)}
+            placeholder="e.g. token_xyz123"
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-slate-900 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 dark:text-white font-mono"
+            disabled={loading}
+          />
+        </div>
+
+        <button 
+          type="submit" 
+          disabled={loading}
+          className="w-full py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-blue-500/20 active:scale-98 transition-all flex items-center justify-center gap-2"
+        >
+          {loading ? (
+            <>
+              <i className="fas fa-circle-notch fa-spin text-sm"></i>
+              Verifying...
+            </>
+          ) : (
+            <>
+              <span>Verify & Proceed</span>
+              <i className="fas fa-arrow-right text-xs"></i>
+            </>
+          )}
+        </button>
+      </form>
     </div>
   );
 };
@@ -1286,34 +1557,7 @@ const CandidateInterviewFlow: React.FC = () => {
         
         const interviewData = { id: interviewDoc.id, ...interviewDoc.data() } as any;
 
-        // Check if this interview requires a token (i.e., it's a post-assessment interview)
-        const requiresToken = interviewData.requiresToken === true;
-        const token = searchParams.get('token');
 
-        if (requiresToken) {
-          if (!token) {
-            throw new Error("A valid access token is required for this interview. Please use the link from your email.");
-          }
-
-          const tokenDocRef = doc(db, 'interviewAccessTokens', token);
-          const tokenDoc = await getDoc(tokenDocRef);
-
-          if (!tokenDoc.exists()) {
-            throw new Error("Invalid or expired interview link. Please check the link from your email.");
-          }
-
-          const tokenData = tokenDoc.data();
-          if (tokenData.isUsed) {
-            throw new Error("This interview link has already been used. Please contact the recruiter if you believe this is an error.");
-          }
-
-          if (tokenData.nextInterviewId !== interviewId) {
-            throw new Error("This interview link is not valid for this job. Please check you are using the correct link.");
-          }
-
-          // Access granted. Mark token as used.
-          await updateDoc(tokenDocRef, { isUsed: true, usedAt: serverTimestamp() });
-        }
 
         // If we reach here, access is granted. Now load the interview data.
         const jobDocRef = doc(db, 'jobs', interviewId);
@@ -1323,7 +1567,7 @@ const CandidateInterviewFlow: React.FC = () => {
 
         setInterview(combinedData as Interview);
         setInterviewState(prev => ({ ...prev, jobTitle: combinedData.title, jobDescription: combinedData.description, isMock: combinedData.isMock, strictness: combinedData.strictness || 'Medium' }));
-        setStep('collect-info');
+        setStep('welcome');
 
       } catch (err: any) { 
         setErrorMsg(err.message); 
@@ -1484,6 +1728,35 @@ const CandidateInterviewFlow: React.FC = () => {
           <div className="absolute inset-0 border-t-4 border-blue-500 rounded-full animate-spin"></div>
           <div className="absolute inset-3 border-t-4 border-purple-500 rounded-full animate-spin reverse"></div>
         </div>
+      </Container>
+    );
+  }
+
+  if (step === 'welcome') {
+    return (
+      <Container>
+        <InterviewWelcomeScreen 
+          interview={interview}
+          onProceed={() => {
+            if (interview?.requiresToken === true) {
+              setStep('enter-code');
+            } else {
+              setStep('collect-info');
+            }
+          }}
+        />
+      </Container>
+    );
+  }
+
+  if (step === 'enter-code') {
+    return (
+      <Container>
+        <AccessCodeVerificationScreen 
+          interviewId={interviewId!}
+          initialToken={searchParams.get('token') || ''}
+          onSuccess={() => setStep('collect-info')}
+        />
       </Container>
     );
   }
@@ -1677,6 +1950,7 @@ const ActiveInterviewSession: React.FC<{
   const [isStopping, setIsStopping] = useState(false);
   const [cameraReady, setCameraReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const currentQ = state.questions[state.currentQuestionIndex];
 
   const [tabWarning, setTabWarning] = useState<string | null>(null);
@@ -1927,16 +2201,24 @@ const ActiveInterviewSession: React.FC<{
 
     // Small delay so the question text renders before audio starts
     const timeout = setTimeout(() => {
+      setIsSpeaking(true);
       speak(currentQ, {
         lang: ttsLang,
-        onEnd: () => console.log('[TTS] Finished reading question'),
-        onError: (err) => console.warn('[TTS] Error reading question:', err),
+        onEnd: () => {
+          setIsSpeaking(false);
+          console.log('[TTS] Finished reading question');
+        },
+        onError: (err) => {
+          setIsSpeaking(false);
+          console.warn('[TTS] Error reading question:', err);
+        },
       });
     }, 400);
 
     return () => {
       clearTimeout(timeout);
       speak.stop();
+      setIsSpeaking(false);
     };
   }, [currentQ, state.language, sessionReady]);
 
@@ -2124,17 +2406,102 @@ const ActiveInterviewSession: React.FC<{
       {/* Main content: camera (left) + question (right) */}
       <div className="interview-room-grid flex-1 flex flex-col md:flex-row gap-2 md:gap-3 p-2 md:p-3 overflow-hidden min-h-0">
 
-        {/* Left panel: camera feed */}
+        {/* Left panel: AI Interviewer & camera feed */}
         <div className="interview-room-camera-column w-full md:w-5/12 flex flex-col gap-1.5 md:gap-3 shrink-0 md:shrink md:min-h-0">
+          {/* AI Interviewer Avatar Card */}
+          <div className="interview-room-avatar-card relative min-h-[150px] h-[28vh] md:h-auto md:flex-1 bg-slate-900 dark:bg-slate-950 rounded-xl md:rounded-2xl overflow-hidden border border-gray-200/10 dark:border-white/5 shadow-2xl flex flex-col items-center justify-center p-5">
+            <style>{`
+              @keyframes soundbar {
+                0%, 100% { height: 20%; }
+                50% { height: 100%; }
+              }
+            `}</style>
+            
+            {/* Holographic scanner grid backdrop */}
+            <div className="absolute inset-0 opacity-10 pointer-events-none" style={{
+              backgroundImage: 'radial-gradient(circle, rgba(59,130,246,0.15) 1px, transparent 1px)',
+              backgroundSize: '16px 16px'
+            }}></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/10 via-transparent to-purple-600/10 pointer-events-none"></div>
+            
+            {/* Advanced AI Hologram Visualizer */}
+            <div className="relative w-24 h-24 md:w-36 md:h-36 flex items-center justify-center">
+              {/* Outer orbit/ring with rotating dash */}
+              <div className={`absolute inset-0 rounded-full border border-dashed border-blue-500/40 ${isSpeaking ? 'animate-spin' : 'animate-[spin_20s_linear_infinite]'} opacity-60`}></div>
+              
+              {/* Middle glowing shell */}
+              <div className={`absolute inset-3 rounded-full border border-purple-500/20 bg-purple-500/5 transition-all duration-700 ${
+                isSpeaking ? 'scale-105 opacity-80 shadow-[0_0_25px_rgba(168,85,247,0.3)]' : 'scale-100 opacity-40 shadow-none'
+              }`}></div>
+
+              {/* Holographic sound waves / node mesh */}
+              <svg className="absolute w-full h-full pointer-events-none z-10" viewBox="0 0 100 100">
+                <defs>
+                  <linearGradient id="avatarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#3b82f6" />
+                    <stop offset="100%" stopColor="#8b5cf6" />
+                  </linearGradient>
+                </defs>
+
+                {/* Animated speech frequency wave arcs */}
+                <circle cx="50" cy="50" r="32" fill="none" stroke="url(#avatarGrad)" strokeWidth="1" strokeDasharray="5,15" className={`origin-center transition-all ${isSpeaking ? 'animate-[spin_4s_linear_infinite]' : 'animate-[spin_12s_linear_infinite]'}`} />
+                <circle cx="50" cy="50" r="28" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeDasharray="40,20" className={`origin-center transition-all ${isSpeaking ? 'animate-[spin_6s_linear_infinite_reverse] opacity-80' : 'animate-[spin_18s_linear_infinite_reverse] opacity-40'}`} />
+
+                {/* Neural grid nodes when speaking */}
+                {isSpeaking ? (
+                  <>
+                    <path d="M 30,50 Q 50,20 70,50 Q 50,80 30,50" fill="none" stroke="#3b82f6" strokeWidth="0.5" opacity="0.3" className="animate-pulse" />
+                    <path d="M 50,30 Q 80,50 50,70 Q 20,50 50,30" fill="none" stroke="#8b5cf6" strokeWidth="0.5" opacity="0.3" className="animate-pulse" />
+                  </>
+                ) : null}
+              </svg>
+
+              {/* Centered Hologram Core */}
+              <div className={`relative w-14 h-14 md:w-20 md:h-20 rounded-full bg-slate-900 border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] z-20 transition-all duration-300 ${
+                isSpeaking ? 'scale-105 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.5)]' : ''
+              }`}>
+                {/* Custom animated equalizer bars inside the core when speaking */}
+                {isSpeaking ? (
+                  <div className="flex items-end gap-1 h-6 md:h-8">
+                    <span className="w-1 bg-blue-400 rounded-full animate-[soundbar_0.8s_ease-in-out_infinite]" style={{ height: '30%' }}></span>
+                    <span className="w-1 bg-blue-300 rounded-full animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]" style={{ height: '70%' }}></span>
+                    <span className="w-1 bg-purple-400 rounded-full animate-[soundbar_0.7s_ease-in-out_infinite_0.3s]" style={{ height: '50%' }}></span>
+                    <span className="w-1 bg-purple-300 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '90%' }}></span>
+                    <span className="w-1 bg-blue-400 rounded-full animate-[soundbar_0.9s_ease-in-out_infinite_0.4s]" style={{ height: '40%' }}></span>
+                  </div>
+                ) : (
+                  <div className="relative w-8 h-8 md:w-10 md:h-10 flex items-center justify-center">
+                    {/* Breathing AI core symbol */}
+                    <div className="absolute inset-0 rounded-full border border-blue-500/30 animate-ping opacity-30"></div>
+                    <i className="fas fa-robot text-lg md:text-xl text-blue-400 animate-pulse"></i>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Speaking/Listening Status Indicator */}
+            <div className="mt-3 md:mt-4 text-center z-10">
+              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] md:text-xs font-bold transition-all duration-300 ${
+                isSpeaking 
+                  ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' 
+                  : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+              }`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isSpeaking ? 'bg-blue-400 animate-ping' : 'bg-emerald-400'}`}></span>
+                {isSpeaking ? 'AI Speaking' : 'Listening...'}
+              </span>
+              <p className="text-[10px] md:text-xs text-slate-400 mt-1.5 font-bold uppercase tracking-widest">AI Interviewer</p>
+            </div>
+          </div>
+
           {/* Camera Card */}
-          <div className="interview-room-camera-card relative min-h-[140px] h-[30vh] md:h-auto md:flex-1 md:min-h-[240px] bg-gray-900 rounded-xl md:rounded-2xl overflow-hidden border border-gray-700/50 shadow-xl">
+          <div className="interview-room-camera-card relative min-h-[140px] h-[25vh] md:h-auto md:flex-1 md:min-h-[200px] bg-gray-900 rounded-xl md:rounded-2xl overflow-hidden border border-gray-700/50 shadow-xl">
             <video ref={videoRef} autoPlay muted playsInline className="interview-room-camera-video w-full h-full object-cover transform scale-x-[-1]" />
 
             {/* Countdown Overlay (scoped to camera) */}
             {sessionReady && countdown > 0 && (
               <div className="interview-room-countdown absolute inset-0 bg-black/70 backdrop-blur-sm flex flex-col items-center justify-center z-20 rounded-xl md:rounded-2xl">
-                <p className="text-white/80 text-sm md:text-lg font-light mb-1 md:mb-2 tracking-widest uppercase">Get Ready</p>
-                <span className="text-5xl md:text-8xl font-black text-white">{countdown}</span>
+                <p className="text-white/80 text-xs md:text-sm font-light mb-1 tracking-widest uppercase">Get Ready</p>
+                <span className="text-4xl md:text-6xl font-black text-white">{countdown}</span>
               </div>
             )}
 
