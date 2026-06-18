@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
-import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { doc, getDoc, addDoc, collection, serverTimestamp, updateDoc, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { uploadToCloudinary, generateInterviewQuestions, requestTranscription, fetchTranscriptText, generateFeedback } from '../services/api';
 import { speak } from '../lib/tts';
@@ -231,11 +231,13 @@ const TicTacToe: React.FC = () => {
 // --- Component: Candidate Info Form ---
 const CandidateInfoForm: React.FC<{
   jobTitle?: string;
+  interviewId: string;
+  onBackToWelcome: () => void;
   onSubmit: (info: CandidateInfo, file: File | null, existingResumeUrl?: string, cloudinaryUrl?: string) => void;
   errorMsg: string | null;
   user: any;
   userProfile: any;
-}> = ({ jobTitle, onSubmit, errorMsg: initialError, user, userProfile }) => {
+}> = ({ jobTitle, interviewId, onBackToWelcome, onSubmit, errorMsg: initialError, user, userProfile }) => {
   const [name, setName] = useState(userProfile?.fullname || userProfile?.name || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState(userProfile?.phone || '');
@@ -243,8 +245,52 @@ const CandidateInfoForm: React.FC<{
   const [uploadedResumeUrl, setUploadedResumeUrl] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(initialError);
+  const [showDuplicatePopup, setShowDuplicatePopup] = useState(false);
   const { isDark } = useTheme();
   const [language, setLanguage] = useState('en');
+
+  // Debounced check in Firestore to see if this email or phone is already used
+  useEffect(() => {
+    if (!email.trim() && !phone.trim()) return;
+
+    let isCancelled = false;
+    const checkDuplicate = async () => {
+      try {
+        const attemptsRef = collection(db, 'interviews', interviewId, 'attempts');
+
+        // Check email
+        if (email.trim()) {
+          const emailQuery = query(attemptsRef, where('candidateInfo.email', '==', email.trim()));
+          const emailSnap = await getDocs(emailQuery);
+          if (!emailSnap.empty && !isCancelled) {
+            setShowDuplicatePopup(true);
+            return;
+          }
+        }
+
+        // Check phone
+        if (phone.trim()) {
+          const phoneQuery = query(attemptsRef, where('candidateInfo.phone', '==', phone.trim()));
+          const phoneSnap = await getDocs(phoneQuery);
+          if (!phoneSnap.empty && !isCancelled) {
+            setShowDuplicatePopup(true);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error("Auto duplicate check failed:", err);
+      }
+    };
+
+    const timer = setTimeout(() => {
+      checkDuplicate();
+    }, 600);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(timer);
+    };
+  }, [email, phone, interviewId]);
 
   // Pre-interview questionnaire states
   const [gender, setGender] = useState('');
@@ -337,7 +383,30 @@ const CandidateInfoForm: React.FC<{
   };
 
   return (
-      <div className="candidate-form-shell w-11/12 md:max-w-2xl lg:max-w-3xl bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700">
+      <div className="candidate-form-shell w-11/12 md:max-w-2xl lg:max-w-3xl bg-white dark:bg-gray-800 p-6 md:p-8 rounded-2xl shadow-lg border border-gray-100 dark:border-gray-700 relative">
+        {showDuplicatePopup && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-[11000] p-4">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 md:p-8 max-w-sm w-full border border-gray-100 dark:border-gray-700 shadow-2xl text-center animate-in scale-in duration-300">
+              <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-950/40 text-red-500 flex items-center justify-center mb-5 mx-auto">
+                <i className="fas fa-exclamation-triangle text-3xl"></i>
+              </div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2.5">Attempt Blocked</h3>
+              <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-6">
+                You have already taken this interview. Only one attempt is allowed.
+              </p>
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowDuplicatePopup(false);
+                  onBackToWelcome();
+                }}
+                className="w-full py-3.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-700 hover:to-rose-700 text-white font-bold rounded-xl shadow-lg shadow-red-500/20 active:scale-98 transition-all flex items-center justify-center"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        )}
         <div className="candidate-form-header text-center mb-6">
           <div className="candidate-form-kicker inline-block px-3 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 text-xs font-bold rounded-full mb-3 border border-blue-100 dark:border-blue-800">
             {jobTitle || 'AI Interview'}
@@ -1609,6 +1678,37 @@ const CandidateInterviewFlow: React.FC = () => {
     setLoadingMsg("Processing your information...");
 
     try {
+      setLoadingMsg("Verifying attempt eligibility...");
+      const attemptsRef = collection(db, 'interviews', interviewId!, 'attempts');
+      
+      let hasAttempted = false;
+      try {
+        const emailQuery = query(attemptsRef, where('candidateInfo.email', '==', submittedInfo.email));
+        const emailSnap = await getDocs(emailQuery);
+        if (!emailSnap.empty) {
+          hasAttempted = true;
+        }
+
+        if (submittedInfo.phone && !hasAttempted) {
+          const phoneQuery = query(attemptsRef, where('candidateInfo.phone', '==', submittedInfo.phone));
+          const phoneSnap = await getDocs(phoneQuery);
+          if (!phoneSnap.empty) {
+            hasAttempted = true;
+          }
+        }
+      } catch (err: any) {
+        console.error("Attempt verification failed:", err);
+        // Map permission-denied to user-friendly already taken interview message
+        if (err.message && (err.message.includes("permission") || err.code === "permission-denied" || err.message.includes("permissions"))) {
+          throw new Error("You have already taken this interview. Only one attempt is allowed.");
+        }
+        throw err;
+      }
+
+      if (hasAttempted) {
+        throw new Error("You have already taken this interview. Only one attempt is allowed.");
+      }
+
       let base64String = '';
       let resumeMimeType = '';
       let resumeUrlToSave = cloudinaryUrl || existingResumeUrl || '';
@@ -1791,6 +1891,8 @@ const CandidateInterviewFlow: React.FC = () => {
         {step === 'collect-info' && (
           <CandidateInfoForm 
             jobTitle={interviewState.jobTitle}
+            interviewId={interviewId!}
+            onBackToWelcome={() => setStep('welcome')}
             onSubmit={handleInfoSubmit} 
             errorMsg={errorMsg}
             user={user}

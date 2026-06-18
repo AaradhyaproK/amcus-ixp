@@ -101,7 +101,7 @@ service cloud.firestore {
     // --- Collection Group Rules ---
     // Allow users to query their own interview attempts across all jobs
     match /{path=**}/attempts/{attemptId} {
-      allow read: if request.auth.uid == resource.data.candidateUID;
+      allow read: if request.auth != null && request.auth.uid == resource.data.candidateUID;
     }
 
     // --- Interview Requests Collection Rules ---
