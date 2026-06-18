@@ -1267,7 +1267,7 @@ const InterviewWelcomeScreen: React.FC<{
 
   useEffect(() => {
     // Speak welcome message
-    const welcomeText = `Hello! Welcome to your AI interview for the role of ${interview.title}. I am your AI interviewer today. Let me explain the process. First, you will enter your details and upload your resume. Second, you will review the job description. Third, we will verify your hardware including camera, microphone, and internet. Finally, we will begin the interview where I will ask you questions one by one. Let's get started!`;
+    const welcomeText = `Hello! Welcome to your AI interview for the role of ${interview.title}. I am your AI Recruiter today. Let me explain the hiring process. First, you will enter your details and upload your resume. Second, you will review the job description. Third, we will verify your hardware including camera, microphone, and internet. Finally, we will begin the interview where I will ask you questions one by one. Let's get started!`;
     
     const timeout = setTimeout(() => {
       setIsSpeaking(true);
@@ -1286,7 +1286,7 @@ const InterviewWelcomeScreen: React.FC<{
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-6 text-center animate-in fade-in slide-in-from-bottom-6 duration-500">
       {/* Hologram Avatar card */}
-      <div className="mb-8 max-w-sm mx-auto bg-slate-900 dark:bg-slate-950 rounded-2xl p-6 border border-gray-200/10 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center">
+      <div className="mb-6 max-w-sm mx-auto bg-slate-900 dark:bg-slate-950 rounded-2xl p-6 border border-gray-200/10 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center">
         <style>{`
           @keyframes soundbar {
             0%, 100% { height: 20%; }
@@ -1318,33 +1318,57 @@ const InterviewWelcomeScreen: React.FC<{
             <circle cx="50" cy="50" r="28" fill="none" stroke="#8b5cf6" strokeWidth="1.5" strokeDasharray="40,20" className={`origin-center transition-all ${isSpeaking ? 'animate-[spin_6s_linear_infinite_reverse] opacity-80' : 'animate-[spin_18s_linear_infinite_reverse] opacity-40'}`} />
           </svg>
 
-          <div className={`relative w-14 h-14 md:w-18 md:h-18 rounded-full bg-slate-900 border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] z-20 transition-all duration-300 ${
+          <div className={`relative w-16 h-16 md:w-20 md:h-20 rounded-full overflow-hidden border-2 border-blue-500/50 flex items-center justify-center shadow-[0_0_20px_rgba(59,130,246,0.3)] z-20 transition-all duration-300 ${
             isSpeaking ? 'scale-105 border-purple-500 shadow-[0_0_30px_rgba(168,85,247,0.5)]' : ''
           }`}>
-            {isSpeaking ? (
-              <div className="flex items-end gap-1 h-6 md:h-8">
-                <span className="w-1 bg-blue-400 rounded-full animate-[soundbar_0.8s_ease-in-out_infinite]" style={{ height: '30%' }}></span>
-                <span className="w-1 bg-blue-300 rounded-full animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]" style={{ height: '70%' }}></span>
-                <span className="w-1 bg-purple-400 rounded-full animate-[soundbar_0.7s_ease-in-out_infinite_0.3s]" style={{ height: '50%' }}></span>
-                <span className="w-1 bg-purple-300 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '90%' }}></span>
-              </div>
-            ) : (
-              <div className="relative w-8 h-8 flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border border-blue-500/30 animate-ping opacity-30"></div>
-                <i className="fas fa-robot text-lg text-blue-400 animate-pulse"></i>
-              </div>
-            )}
+            <img 
+              src="/recruiter_avatar.png" 
+              alt="AI Recruiter" 
+              className={`w-full h-full object-cover transition-transform duration-300 ${isSpeaking ? 'scale-105' : 'scale-100'}`} 
+            />
           </div>
         </div>
 
-        <div className="mt-4 text-center z-10">
+        {/* Small speech frequency wave bars under avatar */}
+        <div className="h-4 flex items-end gap-0.5 mt-2.5 z-10">
+          {isSpeaking ? (
+            <>
+              <span className="w-0.5 bg-blue-400 rounded-full animate-[soundbar_0.8s_ease-in-out_infinite]" style={{ height: '40%' }}></span>
+              <span className="w-0.5 bg-blue-300 rounded-full animate-[soundbar_0.6s_ease-in-out_infinite_0.1s]" style={{ height: '80%' }}></span>
+              <span className="w-0.5 bg-purple-400 rounded-full animate-[soundbar_0.7s_ease-in-out_infinite_0.3s]" style={{ height: '50%' }}></span>
+              <span className="w-0.5 bg-purple-300 rounded-full animate-[soundbar_0.5s_ease-in-out_infinite_0.2s]" style={{ height: '100%' }}></span>
+              <span className="w-0.5 bg-blue-400 rounded-full animate-[soundbar_0.9s_ease-in-out_infinite_0.4s]" style={{ height: '30%' }}></span>
+            </>
+          ) : (
+            <div className="flex gap-0.5">
+              <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+              <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+              <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+              <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+              <span className="w-0.5 h-1 bg-gray-500 rounded-full opacity-40"></span>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-3 text-center z-10">
           <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold transition-all duration-300 ${
             isSpeaking ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
           }`}>
             <span className={`w-1.5 h-1.5 rounded-full ${isSpeaking ? 'bg-blue-400 animate-ping' : 'bg-emerald-400'}`}></span>
-            {isSpeaking ? 'AI speaking' : 'Standby'}
+            {isSpeaking ? 'AI Recruiter speaking' : 'AI Recruiter (Standby)'}
           </span>
         </div>
+      </div>
+
+      {/* Mobile-only Start Onboarding CTA (directly below avatar card for quick access) */}
+      <div className="block md:hidden mb-6">
+        <button 
+          onClick={onProceed}
+          className="w-full max-w-xs px-6 py-3.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-extrabold rounded-2xl shadow-lg shadow-blue-500/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mx-auto"
+        >
+          <span>Start Onboarding</span>
+          <i className="fas fa-arrow-right text-sm"></i>
+        </button>
       </div>
 
       {/* Greeting and description */}
