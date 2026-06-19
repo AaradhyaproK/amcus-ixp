@@ -554,6 +554,29 @@ const InterviewResponses: React.FC = () => {
                                 <option value="Shortlist">Shortlist</option>
                                 <option value="Reject">Reject</option>
                               </select>
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  try {
+                                    const nextVal = !(submission as any).allowReattempt;
+                                    const submissionRef = doc(db, 'interviews', interviewId!, 'attempts', submission.id);
+                                    await updateDoc(submissionRef, { allowReattempt: nextVal });
+                                    messageBox.showSuccess(nextVal ? "Reattempt permission granted!" : "Reattempt permission removed.");
+                                  } catch (err) {
+                                    console.error("Error updating reattempt status:", err);
+                                    messageBox.showError("Failed to update reattempt status.");
+                                  }
+                                }}
+                                className={`w-full text-xs font-extrabold py-1.5 px-3 border rounded-lg transition-all flex items-center justify-center gap-1.5 mt-1.5 ${
+                                  (submission as any).allowReattempt
+                                    ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-800/50'
+                                    : 'bg-gray-100 hover:bg-gray-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-zinc-700'
+                                }`}
+                                title={(submission as any).allowReattempt ? "Remove Reattempt Chance" : "Give Reattempt Chance"}
+                              >
+                                <i className="fas fa-redo text-[10px]"></i>
+                                <span>{(submission as any).allowReattempt ? 'Reattempt Allowed' : 'Allow Reattempt'}</span>
+                              </button>
                             </div>
                         </div>
                         <div className="mt-5 pt-4 border-t border-gray-100 dark:border-white/5 flex justify-end">

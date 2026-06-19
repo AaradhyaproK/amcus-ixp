@@ -91,10 +91,16 @@ service cloud.firestore {
             // Allow anyone to read a report. This makes report links public.
             allow read: if true;
 
-            // Allow the recruiter who owns the job/interview to update the submission status.
-            allow update: if request.auth != null
-                          && get(/databases/$(database)/documents/interviews/$(interviewId)).data.recruiterUID == request.auth.uid
-                          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']);
+            // Allow the recruiter who owns the job/interview to update the submission status/reattempts, or anyone to consume a reattempt flag.
+            allow update: if (
+                              request.auth != null
+                              && get(/databases/$(database)/documents/interviews/$(interviewId)).data.recruiterUID == request.auth.uid
+                              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'allowReattempt'])
+                            ) || (
+                              request.resource.data.diff(resource.data).affectedKeys().hasOnly(['allowReattempt'])
+                              && resource.data.allowReattempt == true
+                              && request.resource.data.allowReattempt == false
+                            );
         }
     }
 

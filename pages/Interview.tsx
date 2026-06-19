@@ -263,8 +263,11 @@ const CandidateInfoForm: React.FC<{
           const emailQuery = query(attemptsRef, where('candidateInfo.email', '==', email.trim()));
           const emailSnap = await getDocs(emailQuery);
           if (!emailSnap.empty && !isCancelled) {
-            setShowDuplicatePopup(true);
-            return;
+            const hasReattempt = emailSnap.docs.some(doc => doc.data().allowReattempt === true);
+            if (!hasReattempt) {
+              setShowDuplicatePopup(true);
+              return;
+            }
           }
         }
 
@@ -273,8 +276,11 @@ const CandidateInfoForm: React.FC<{
           const phoneQuery = query(attemptsRef, where('candidateInfo.phone', '==', phone.trim()));
           const phoneSnap = await getDocs(phoneQuery);
           if (!phoneSnap.empty && !isCancelled) {
-            setShowDuplicatePopup(true);
-            return;
+            const hasReattempt = phoneSnap.docs.some(doc => doc.data().allowReattempt === true);
+            if (!hasReattempt) {
+              setShowDuplicatePopup(true);
+              return;
+            }
           }
         }
       } catch (err) {
@@ -1682,17 +1688,32 @@ const CandidateInterviewFlow: React.FC = () => {
       const attemptsRef = collection(db, 'interviews', interviewId!, 'attempts');
       
       let hasAttempted = false;
+      let reattemptDocsToConsume: string[] = [];
       try {
         const emailQuery = query(attemptsRef, where('candidateInfo.email', '==', submittedInfo.email));
         const emailSnap = await getDocs(emailQuery);
-        if (!emailSnap.empty) {
-          hasAttempted = true;
-        }
-
-        if (submittedInfo.phone && !hasAttempted) {
+        const emailReattempts = emailSnap.docs.filter(doc => doc.data().allowReattempt === true);
+        
+        let phoneReattempts: any[] = [];
+        let phoneSnapDocs: any[] = [];
+        if (submittedInfo.phone) {
           const phoneQuery = query(attemptsRef, where('candidateInfo.phone', '==', submittedInfo.phone));
           const phoneSnap = await getDocs(phoneQuery);
-          if (!phoneSnap.empty) {
+          phoneSnapDocs = phoneSnap.docs;
+          phoneReattempts = phoneSnap.docs.filter(doc => doc.data().allowReattempt === true);
+        }
+
+        const totalAttemptsCount = emailSnap.size + phoneSnapDocs.length;
+        const totalReattemptsCount = emailReattempts.length + phoneReattempts.length;
+
+        if (totalAttemptsCount > 0) {
+          if (totalReattemptsCount > 0) {
+            // Collect the doc IDs of the attempts that granted the reattempt permission
+            reattemptDocsToConsume = [
+              ...emailReattempts.map(d => d.id),
+              ...phoneReattempts.map(d => d.id)
+            ];
+          } else {
             hasAttempted = true;
           }
         }
@@ -1707,6 +1728,20 @@ const CandidateInterviewFlow: React.FC = () => {
 
       if (hasAttempted) {
         throw new Error("You have already taken this interview. Only one attempt is allowed.");
+      }
+
+      // Consume the reattempt permissions immediately if any exist
+      if (reattemptDocsToConsume.length > 0) {
+        setLoadingMsg("Consuming reattempt permission...");
+        for (const docId of reattemptDocsToConsume) {
+          try {
+            await updateDoc(doc(db, 'interviews', interviewId!, 'attempts', docId), {
+              allowReattempt: false
+            });
+          } catch (e) {
+            console.error("Failed to consume reattempt on doc", docId, e);
+          }
+        }
       }
 
       let base64String = '';

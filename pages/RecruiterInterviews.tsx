@@ -85,7 +85,7 @@ const RecruiterInterviews: React.FC = () => {
       for (const interview of interviewsData) {
          try {
              const qs = await getDocs(collection(db, 'interviews', interview.id, 'attempts'));
-             newSubmissionsMap[interview.id] = qs.docs.map(d => d.data());
+             newSubmissionsMap[interview.id] = qs.docs.map(d => ({ id: d.id, ...d.data() }));
          } catch (e) {
              console.error("Error fetching submissions for", interview.id, e);
              newSubmissionsMap[interview.id] = [];
@@ -256,6 +256,19 @@ const RecruiterInterviews: React.FC = () => {
         messageBox.showError('Failed to resend invitation.');
     } finally {
         setResendingEmail(null);
+    }
+  };
+
+  const handleAllowReattempt = async (interviewId: string, attemptId: string, currentAllowValue: boolean) => {
+    try {
+        const attemptRef = doc(db, 'interviews', interviewId, 'attempts', attemptId);
+        await updateDoc(attemptRef, {
+            allowReattempt: !currentAllowValue
+        });
+        messageBox.showSuccess(!currentAllowValue ? "Reattempt permission granted!" : "Reattempt permission removed.");
+    } catch (err: any) {
+        console.error("Error updating reattempt status:", err);
+        messageBox.showError("Failed to update reattempt status.");
     }
   };
 
@@ -731,11 +744,16 @@ const RecruiterInterviews: React.FC = () => {
                             {(() => {
                                 const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
                                 const submissions = submissionsMap[interview.id] || [];
-                                const unifiedList: {email: string, hasSubmitted: boolean}[] = [];
+                                const unifiedList: {email: string, hasSubmitted: boolean, attemptId?: string, allowReattempt?: boolean}[] = [];
                                 
                                 // 1. Add all actual submissions (invited or uninvited)
                                 submissions.forEach(sub => {
-                                    unifiedList.push({ email: sub.candidateInfo?.email || 'N/A', hasSubmitted: true });
+                                    unifiedList.push({ 
+                                        email: sub.candidateInfo?.email || 'N/A', 
+                                        hasSubmitted: true,
+                                        attemptId: sub.id,
+                                        allowReattempt: sub.allowReattempt || false
+                                    });
                                 });
 
                                 // 2. Add explicitly invited members who haven't submitted yet
@@ -752,13 +770,28 @@ const RecruiterInterviews: React.FC = () => {
 
                                 return unifiedList.map((cand, idx) => (
                                     <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-black/20 text-[11px] rounded-lg px-2.5 py-1.5 border border-gray-100 dark:border-white/5">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[130px] lg:max-w-[155px]" title={cand.email}>
+                                        <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[120px] lg:max-w-[140px]" title={cand.email}>
                                             {cand.email}
                                         </span>
                                         {cand.hasSubmitted ? (
-                                            <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1 shrink-0">
-                                                <i className="fas fa-check-circle"></i> Submitted
-                                            </span>
+                                            <div className="flex items-center gap-1.5 shrink-0">
+                                                <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1">
+                                                    <i className="fas fa-check-circle"></i> Submitted
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAllowReattempt(interview.id, cand.attemptId!, cand.allowReattempt || false)}
+                                                    className={`inline-flex items-center gap-0.5 px-1 py-0.5 border rounded text-[9px] font-bold transition-all ${
+                                                        cand.allowReattempt 
+                                                            ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-800/50' 
+                                                            : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-zinc-700'
+                                                    }`}
+                                                    title={cand.allowReattempt ? "Remove Reattempt Chance" : "Give Reattempt Chance"}
+                                                >
+                                                    <i className="fas fa-redo text-[8px]"></i>
+                                                    <span>{cand.allowReattempt ? 'Allowed' : 'Reattempt'}</span>
+                                                </button>
+                                            </div>
                                         ) : (
                                             <div className="flex items-center gap-1.5 shrink-0">
                                                 <span className="text-yellow-600 dark:text-yellow-500 font-semibold flex items-center gap-1">
@@ -1212,6 +1245,7 @@ const RecruiterInterviews: React.FC = () => {
                 interview={interview} 
                 submissionsMap={submissionsMap} 
                 setWhatsappModal={(modal) => setWhatsappModal({ ...modal, isOpen: true })} 
+                onAllowReattempt={handleAllowReattempt}
                 onClose={() => setFullRosterModal(null)} 
             />,
             document.body
@@ -1225,19 +1259,25 @@ interface FullRosterModalContentProps {
     interview: Interview;
     submissionsMap: Record<string, any[]>;
     setWhatsappModal: (modal: any) => void;
+    onAllowReattempt: (interviewId: string, attemptId: string, currentAllowValue: boolean) => Promise<void>;
     onClose: () => void;
 }
 
-const FullRosterModalContent: React.FC<FullRosterModalContentProps> = ({ interview, submissionsMap, setWhatsappModal, onClose }) => {
+const FullRosterModalContent: React.FC<FullRosterModalContentProps> = ({ interview, submissionsMap, setWhatsappModal, onAllowReattempt, onClose }) => {
     const [rosterSearch, setRosterSearch] = useState('');
     const [statusFilter, setStatusFilter] = useState('All');
 
     const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
     const submissions = submissionsMap[interview.id] || [];
-    const unifiedList: {email: string, hasSubmitted: boolean}[] = [];
+    const unifiedList: {email: string, hasSubmitted: boolean, attemptId?: string, allowReattempt?: boolean}[] = [];
     
     submissions.forEach(sub => {
-        unifiedList.push({ email: sub.candidateInfo?.email || 'N/A', hasSubmitted: true });
+        unifiedList.push({ 
+            email: sub.candidateInfo?.email || 'N/A', 
+            hasSubmitted: true,
+            attemptId: sub.id,
+            allowReattempt: sub.allowReattempt || false
+        });
     });
 
     explicitEmails.forEach(email => {
@@ -1311,9 +1351,24 @@ const FullRosterModalContent: React.FC<FullRosterModalContentProps> = ({ intervi
                                     {cand.email}
                                 </span>
                                 {cand.hasSubmitted ? (
-                                    <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1.5 shrink-0">
-                                        <i className="fas fa-check-circle"></i> Submitted
-                                    </span>
+                                     <div className="flex items-center gap-2 shrink-0">
+                                         <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1.5 font-sans">
+                                             <i className="fas fa-check-circle"></i> Submitted
+                                         </span>
+                                         <button
+                                             type="button"
+                                             onClick={() => onAllowReattempt(interview.id, cand.attemptId!, cand.allowReattempt || false)}
+                                             className={`inline-flex items-center gap-1 px-2.5 py-1.5 border rounded-lg text-[10px] font-extrabold transition-all ${
+                                                 cand.allowReattempt 
+                                                     ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-800/50' 
+                                                     : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-zinc-700'
+                                             }`}
+                                             title={cand.allowReattempt ? "Remove Reattempt Chance" : "Give Reattempt Chance"}
+                                         >
+                                             <i className="fas fa-redo"></i>
+                                             <span>{cand.allowReattempt ? 'Allowed' : 'Allow Reattempt'}</span>
+                                         </button>
+                                     </div>
                                 ) : (
                                     <div className="flex items-center gap-2 shrink-0">
                                         <span className="text-yellow-600 dark:text-yellow-500 font-bold flex items-center gap-1.5">
