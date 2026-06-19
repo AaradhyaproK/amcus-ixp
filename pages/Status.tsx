@@ -320,8 +320,12 @@ const StatusPage: React.FC = () => {
           )}
           <p className="text-xs text-muted-foreground mt-3">
             Powered by{' '}
-            <a href="#/" className="text-blue-600 dark:text-blue-400 hover:underline transition-colors">
+            <a href="#/" className="text-blue-600 dark:text-blue-400 hover:underline transition-colors mr-1">
               InterviewXpert
+            </a>
+            | Developed by{' '}
+            <a href="https://snab.co.in" target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline transition-colors">
+              SNAB Innovations
             </a>
           </p>
         </div>

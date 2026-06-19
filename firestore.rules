@@ -220,5 +220,12 @@ service cloud.firestore {
       // Only admins can update (approve) or delete reviews
       allow update, delete: if request.auth != null && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
+
+    // --- Settings Collection Rules ---
+    match /settings/{settingId} {
+      // Admin Permission: Admins can read/write universal pricing or configuration settings
+      allow read, write: if request.auth != null 
+                          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
   }
 }

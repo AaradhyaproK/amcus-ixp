@@ -452,7 +452,7 @@ const AuthPage: React.FC = () => {
           </Link>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          &copy; {new Date().getFullYear()} InterviewXpert. Designed by <span className="text-foreground">Team Interview Expert</span>.
+          &copy; {new Date().getFullYear()} InterviewXpert. Developed by <a href="https://snab.co.in" target="_blank" rel="noopener noreferrer" className="hover:underline text-primary">SNAB Innovations</a>.
         </p>
       </footer>
 

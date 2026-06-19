@@ -217,8 +217,9 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               </Link>
             </div>
 
-            <div className="text-xs text-gray-400 dark:text-gray-600 font-medium">
-              &copy; 2026 InterviewXpert Inc.
+            <div className="text-xs text-gray-400 dark:text-gray-600 font-medium text-center md:text-right">
+              <div>&copy; 2026 InterviewXpert Inc.</div>
+              <div className="text-[10px] opacity-75 mt-0.5">Developed by <a href="https://snab.co.in" target="_blank" rel="noopener noreferrer" className="hover:underline text-primary">SNAB Innovations</a></div>
             </div>
           </div>
         </div>
