@@ -19,7 +19,7 @@ const AuthPage: React.FC = () => {
   const navigate = useNavigate();
 
   // Animation Refs
-  const logoRef = useRef<HTMLImageElement>(null);
+  const logoRef = useRef<HTMLDivElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
   const descRef = useRef<HTMLParagraphElement>(null);
   const featuresRef = useRef<HTMLDivElement>(null);
@@ -155,6 +155,20 @@ const AuthPage: React.FC = () => {
             <div className="w-full max-w-sm mx-auto">
               {/* Header */}
               <div className="mb-6">
+                <a
+                  href="https://www.snab.co.in/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 mb-5 bg-zinc-100/80 dark:bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 w-fit cursor-pointer hover:bg-zinc-200/50 dark:hover:bg-zinc-900/60 transition-colors"
+                >
+                  <img
+                    src="https://www.snab.co.in/assets/snab-nobg-CjMx88gi.png"
+                    alt="SNAB Logo"
+                    className="h-7 w-auto object-contain"
+                  />
+                  <div className="h-4 w-px bg-zinc-200 dark:bg-zinc-800"></div>
+                  <span className="text-[10px] text-zinc-600 dark:text-zinc-400 font-semibold tracking-wider uppercase">Powered by SNAB Innovations</span>
+                </a>
                 <h1 className="text-[22px] font-semibold tracking-tight mb-2 text-white">
                   {isReset ? 'Reset Password' : isLogin ? 'Welcome back!' : 'Request recruiter access'}
                 </h1>
@@ -383,12 +397,23 @@ const AuthPage: React.FC = () => {
             <div className="absolute bottom-0 left-0 right-0 p-8 z-20 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col justify-end h-full pointer-events-none">
               <div className="p-4 flex flex-col h-full justify-center relative z-30">
 
-                <img
+                <a
                   ref={logoRef}
-                  src="/logo-partnership-dark.png"
-                  alt="InterviewXpert X DSource partnership logo"
-                  className="w-56 max-w-full h-auto mb-6 shadow-xl shadow-cyan-500/10 opacity-0"
-                />
+                  href="https://www.snab.co.in/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3.5 mb-6 opacity-0 w-fit cursor-pointer hover:opacity-90 transition-opacity"
+                >
+                  <img
+                    src="https://www.snab.co.in/assets/snab-nobg-CjMx88gi.png"
+                    alt="SNAB Innovations Logo"
+                    className="h-10 w-auto object-contain shadow-xl shadow-cyan-500/10"
+                  />
+                  <div className="h-5 w-px bg-white/20"></div>
+                  <span className="text-xl font-bold tracking-wider text-white bg-clip-text bg-gradient-to-r from-white via-zinc-200 to-zinc-400 font-sans">
+                    SNAB Innovations LLP
+                  </span>
+                </a>
 
                 <h3
                   ref={titleRef}
@@ -452,7 +477,7 @@ const AuthPage: React.FC = () => {
           </Link>
         </div>
         <p className="text-[10px] text-muted-foreground">
-          &copy; {new Date().getFullYear()} InterviewXpert. Developed by <a href="https://snab.co.in" target="_blank" rel="noopener noreferrer" className="hover:underline text-primary">SNAB Innovations</a>.
+          &copy; {new Date().getFullYear()} InterviewXpert. Powered by SNAB Innovations LLP.
         </p>
       </footer>
 
