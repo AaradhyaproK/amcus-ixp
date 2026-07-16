@@ -80,6 +80,9 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     <Link to="/recruiter/tests" className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${isActive('/recruiter/tests') ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'}`}>
                       Assessments
                     </Link>
+                    <Link to="/recruiter/resumes" className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${isActive('/recruiter/resumes') ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'}`}>
+                      Resumes
+                    </Link>
                   </>
                 ) : (
                   <Link to="/" className={`px-4 py-1.5 rounded-full text-sm font-medium transition-all duration-300 ${isActive('/') ? 'bg-white dark:bg-white/10 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-200 dark:hover:bg-white/5'}`}>
@@ -262,6 +265,7 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                     <Link to="/recruiter/interviews" onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isActive('/recruiter/interviews') ? 'bg-primary/10 text-primary' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}`}><i className="fas fa-video w-5 text-center"></i> My Interviews</Link>
                     <Link to="/recruiter/interview/create" onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isActive('/recruiter/interview/create') ? 'bg-primary/10 text-primary' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}`}><i className="fas fa-video w-5 text-center"></i> Create Interview</Link>
                     <Link to="/recruiter/tests" onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isActive('/recruiter/tests') ? 'bg-primary/10 text-primary' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}`}><i className="fas fa-clipboard-list w-5 text-center"></i> Assessments</Link>
+                    <Link to="/recruiter/resumes" onClick={() => setIsMobileMenuOpen(false)} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${isActive('/recruiter/resumes') ? 'bg-primary/10 text-primary' : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-white/5 hover:text-gray-900 dark:hover:text-white'}`}><i className="fas fa-file-alt w-5 text-center"></i> Resumes</Link>
                   </>
                 ) : (
                   <>

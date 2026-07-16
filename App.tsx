@@ -20,6 +20,7 @@ import RecruiterTests from './pages/RecruiterTests';
 import CreateTest from './pages/CreateTest';
 import TakeTest from './pages/TakeTest';
 import TestResults from './pages/TestResults';
+import RecruiterResumes from './pages/RecruiterResumes';
 import ContactUs from './pages/ContactUs';
 import ReportBug from './pages/ReportBug';
 import CreateInterview from './pages/CreateInterview';
@@ -198,6 +199,7 @@ const App: React.FC = () => {
                   <Route path="recruiter/tests" element={<ProtectedRoute role="recruiter"><RecruiterTests /></ProtectedRoute>} />
                   <Route path="recruiter/tests/create" element={<ProtectedRoute role="recruiter"><CreateTest /></ProtectedRoute>} />
                   <Route path="recruiter/tests/:testId/results" element={<ProtectedRoute role="recruiter"><TestResults /></ProtectedRoute>} />
+                  <Route path="recruiter/resumes" element={<ProtectedRoute role="recruiter"><RecruiterResumes /></ProtectedRoute>} />
                   
                   {/* Shared Routes */}
                   <Route path="profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />

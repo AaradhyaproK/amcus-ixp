@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { collection, query, onSnapshot, deleteDoc, doc, updateDoc, arrayUnion, where, getDocs } from 'firebase/firestore';
+import React, { useEffect, useState, useMemo } from 'react';
+import { collection, query, onSnapshot, deleteDoc, doc, updateDoc, arrayUnion, where, getDocs, addDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { Link, useNavigate } from 'react-router-dom';
@@ -11,7 +11,8 @@ import { createPortal } from 'react-dom';
 import { sendInterviewInvitations } from '../services/brevoService';
 import EditJobModal from './EditJob';
 
-import { evaluateResumeMatch } from '../services/api';
+import { evaluateResumeMatch, uploadToCloudinary } from '../services/api';
+import { grokGenerateText } from '../services/grokService';
 
 // Setup PDF.js worker to enable PDF parsing
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -39,8 +40,73 @@ const RecruiterInterviews: React.FC = () => {
       email: string;
       phone: string;
       message: string;
-      interview: Interview;
-  } | null>(null);
+      interview?: Interview;
+  }>({ isOpen: false, email: '', phone: '', message: '' });
+
+  // Load candidate resumes pool
+  const [dbCandidates, setDbCandidates] = useState<any[]>([]);
+  const [candSearchQuery, setCandSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!user) return;
+    const qResumes = query(collection(db, 'candidateResumes'), where('recruiterUID', '==', user.uid));
+    const unsubscribe = onSnapshot(
+      qResumes,
+      (snapshot) => {
+        const records = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+        setDbCandidates(records);
+      },
+      (err) => {
+        console.error('Error loading db candidates in interviews page:', err);
+      }
+    );
+    return () => unsubscribe();
+  }, [user]);
+
+  const suggestedCandidates = useMemo(() => {
+    if (!selectedInterview) return [];
+    const reqSkills = selectedInterview.skills
+      ? selectedInterview.skills.split(',').map((s: string) => s.trim().toLowerCase()).filter((s: string) => s)
+      : [];
+
+    return dbCandidates
+      .filter((cand) => cand.isActive !== false)
+      .map((cand) => {
+        const candSkillsLower = (cand.skills || []).map((s: string) => s.toLowerCase());
+      let matchingCount = 0;
+      reqSkills.forEach((skill: string) => {
+        if (candSkillsLower.some((cs: string) => cs.includes(skill) || skill.includes(cs))) {
+          matchingCount++;
+        }
+      });
+      
+      const score = reqSkills.length > 0 ? Math.round((matchingCount / reqSkills.length) * 100) : 50;
+      return { ...cand, matchScore: score };
+    })
+    .sort((a, b) => b.matchScore - a.matchScore)
+    .slice(0, 4); // Show top 4 suggestions
+  }, [dbCandidates, selectedInterview]);
+
+  const searchedCandidates = useMemo(() => {
+    if (!candSearchQuery.trim()) return [];
+    const queryLower = candSearchQuery.toLowerCase().trim();
+    return dbCandidates.filter((cand) => {
+      const matchName = cand.name?.toLowerCase().includes(queryLower);
+      const matchEmail = cand.email?.toLowerCase().includes(queryLower);
+      const matchSkills = cand.skills?.some((s: string) => s.toLowerCase().includes(queryLower));
+      return matchName || matchEmail || matchSkills;
+    });
+  }, [dbCandidates, candSearchQuery]);
+
+  const addDbCandidateToInvite = (cand: any) => {
+    if (!newEmails.includes(cand.email)) {
+      setNewEmails(prev => [...prev, cand.email]);
+      setParsedCandidates(prev => [...prev, { email: cand.email, phone: cand.phone || 'N/A', matchScore: cand.matchScore ? String(cand.matchScore) : 'N/A' }]);
+    }
+  };
 
   // Search and Filter States
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,6 +179,7 @@ const RecruiterInterviews: React.FC = () => {
 
   const openInviteModal = (interview: Interview) => {
     setSelectedInterview(interview);
+    setCandSearchQuery('');
     setIsInviteModalOpen(true);
   };
 
@@ -123,6 +190,11 @@ const RecruiterInterviews: React.FC = () => {
   const handleResumeUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+
+    if (!user) {
+      messageBox.showError('You must be signed in to upload resumes.');
+      return;
+    }
 
     setParsingResumes(true);
     const newCandidatesFound: {email: string, phone: string, matchScore?: string}[] = [];
@@ -158,8 +230,30 @@ const RecruiterInterviews: React.FC = () => {
             const lowerEmail = emailMatch[1].toLowerCase();
             const phone = phoneMatch ? phoneMatch[0] : 'N/A';
             
+            // Check duplicate email BEFORE uploading and parsing
+            const qExist = query(
+              collection(db, 'candidateResumes'),
+              where('recruiterUID', '==', user.uid),
+              where('email', '==', lowerEmail)
+            );
+            const existSnap = await getDocs(qExist);
+            let existingDocId: string | null = null;
+            let shouldSave = true;
+
+            if (!existSnap.empty) {
+              const existingDoc = existSnap.docs[0];
+              const existingData = existingDoc.data();
+              existingDocId = existingDoc.id;
+
+              const confirmOverwrite = window.confirm(
+                `A candidate with the email "${lowerEmail}" already exists (${existingData.name || 'Unnamed'}). Do you want to overwrite their profile with this new resume?`
+              );
+              if (!confirmOverwrite) {
+                shouldSave = false;
+              }
+            }
+
             // Check if not already invited/added
-            // We use functional updates later, but for the map function, we check against the current state array.
             if (!(selectedInterview?.candidateEmails || []).includes(lowerEmail) && !newEmails.includes(lowerEmail)) {
                 
                 // Fetch AI match score
@@ -176,6 +270,76 @@ const RecruiterInterviews: React.FC = () => {
                 if (!newCandidatesFound.some(c => c.email === lowerEmail)) {
                     newCandidatesFound.push({ email: lowerEmail, phone, matchScore });
                 }
+            }
+
+            if (shouldSave) {
+              // Sync with candidateResumes Database
+              try {
+                // 1. Upload to Cloudinary
+                const uploadResult = await uploadToCloudinary(file, 'auto').catch((err) => {
+                    console.error("Cloudinary upload failed inside invite flow:", err);
+                    return null;
+                });
+                const resumeUrl = typeof uploadResult === 'string' ? uploadResult : uploadResult?.url || '';
+
+                // 2. AI Parse Candidate Details
+                let parsedName = file.name.replace(/\.[^/.]+$/, "");
+                let skills: string[] = [];
+                let experienceYears = 0;
+                let summary = "Candidate profile parsed from resume during interview invitation.";
+
+                if (text.length > 50) {
+                  const systemPrompt = 'You are an expert HR assistant. Parse the candidate\'s resume text and extract candidate details into a valid JSON object. Do not include markdown code block formatting like ```json in your response, just the raw JSON.';
+                  const userPrompt = `
+Extract details from this resume text:
+---
+${text.slice(0, 4500)}
+---
+
+Output format (MUST be valid JSON):
+{
+  "name": "Full name of candidate",
+  "email": "Candidate email",
+  "phone": "Candidate phone",
+  "skills": ["Array of key skills, programming languages, technologies, tools, frameworks"],
+  "experienceYears": number (Estimated total years of work experience as a integer. If none/entry level, output 0),
+  "summary": "2-3 sentences professional profile summary of the candidate"
+}
+`;
+                  const aiResponse = await grokGenerateText(systemPrompt, userPrompt, 0.2);
+                  let cleanJson = aiResponse.trim();
+                  if (cleanJson.startsWith('```')) {
+                    cleanJson = cleanJson.replace(/```json/g, '').replace(/```/g, '').trim();
+                  }
+                  const parsed = JSON.parse(cleanJson);
+                  if (parsed.name) parsedName = parsed.name;
+                  if (Array.isArray(parsed.skills)) skills = parsed.skills;
+                  if (typeof parsed.experienceYears === 'number') experienceYears = parsed.experienceYears;
+                  if (parsed.summary) summary = parsed.summary;
+                }
+
+                // 3. Save/Overwrite in database
+                const candidateData = {
+                  recruiterUID: user.uid,
+                  name: parsedName,
+                  email: lowerEmail,
+                  phone: phone === 'N/A' ? '' : phone,
+                  skills: skills.map(s => s.trim()),
+                  experienceYears,
+                  summary,
+                  resumeUrl,
+                  fileName: file.name,
+                  createdAt: serverTimestamp(),
+                };
+
+                if (existingDocId) {
+                  await setDoc(doc(db, 'candidateResumes', existingDocId), candidateData);
+                } else {
+                  await addDoc(collection(db, 'candidateResumes'), candidateData);
+                }
+              } catch (syncErr) {
+                console.error("Error auto-saving resume to database in invite flow:", syncErr);
+              }
             }
         }
         filesProcessed++;
@@ -925,12 +1089,63 @@ const RecruiterInterviews: React.FC = () => {
                                 className="w-1/3 p-2 border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-sm outline-none" 
                             />
                             <button 
-                                onClick={() => {
+                                onClick={async () => {
                                     if (!newEmail) return;
-                                    setNewEmails([...newEmails, newEmail]);
-                                    if (manualPhone) {
-                                        setParsedCandidates(prev => [...prev, { email: newEmail.toLowerCase(), phone: manualPhone, matchScore: 'N/A' }]);
+                                    const emailToUse = newEmail.trim().toLowerCase();
+                                    setNewEmails([...newEmails, emailToUse]);
+                                    
+                                    setParsedCandidates(prev => [...prev, { email: emailToUse, phone: manualPhone || 'N/A', matchScore: 'N/A' }]);
+
+                                    // Save candidate to candidateResumes collection automatically
+                                    try {
+                                      const qExist = query(
+                                        collection(db, 'candidateResumes'),
+                                        where('recruiterUID', '==', user.uid),
+                                        where('email', '==', emailToUse)
+                                      );
+                                      const existSnap = await getDocs(qExist);
+                                      
+                                      const derivedName = emailToUse.split('@')[0].replace(/[._-]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                                      
+                                      if (!existSnap.empty) {
+                                        const existingDoc = existSnap.docs[0];
+                                        const existingData = existingDoc.data();
+                                        const confirmOverwrite = window.confirm(
+                                          `A candidate with the email "${emailToUse}" already exists (${existingData.name || 'Unnamed'}). Do you want to overwrite their profile with this new manual entry?`
+                                        );
+                                        
+                                        if (confirmOverwrite) {
+                                          await setDoc(existingDoc.ref, {
+                                            recruiterUID: user.uid,
+                                            name: derivedName,
+                                            email: emailToUse,
+                                            phone: manualPhone || '',
+                                            skills: [],
+                                            experienceYears: 0,
+                                            summary: 'Manually updated candidate profile during interview invitation.',
+                                            resumeUrl: '',
+                                            fileName: 'Manual Entry',
+                                            createdAt: serverTimestamp(),
+                                          });
+                                        }
+                                      } else {
+                                        await addDoc(collection(db, 'candidateResumes'), {
+                                          recruiterUID: user.uid,
+                                          name: derivedName,
+                                          email: emailToUse,
+                                          phone: manualPhone || '',
+                                          skills: [],
+                                          experienceYears: 0,
+                                          summary: 'Manually added candidate profile during interview invitation.',
+                                          resumeUrl: '',
+                                          fileName: 'Manual Entry',
+                                          createdAt: serverTimestamp(),
+                                        });
+                                      }
+                                    } catch (dbErr) {
+                                      console.error("Error auto-saving manual candidate to resumes database:", dbErr);
                                     }
+
                                     setNewEmail('');
                                     setManualPhone('');
                                 }} 
@@ -938,6 +1153,83 @@ const RecruiterInterviews: React.FC = () => {
                             >
                                 Add
                             </button>
+                        </div>
+                    </div>
+                    
+                    {/* Search & Suggest from Database */}
+                    <div className="border-t border-gray-200 dark:border-gray-700/60 pt-4 space-y-4 text-gray-900 dark:text-white">
+                        <div>
+                            <label className="block text-sm font-semibold mb-2 flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
+                                <i className="fas fa-search text-gray-400"></i> Search Candidate Database
+                            </label>
+                            <input
+                                type="text"
+                                value={candSearchQuery}
+                                onChange={(e) => setCandSearchQuery(e.target.value)}
+                                placeholder="Search by name, email, or skill..."
+                                className="w-full p-2.5 border rounded-xl bg-white dark:bg-gray-700/50 border-gray-300 dark:border-gray-650 text-sm outline-none text-gray-900 dark:text-white"
+                            />
+                            {candSearchQuery.trim() && (
+                                <div className="mt-2 border border-gray-200 dark:border-gray-700 rounded-xl max-h-[150px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/60 bg-white dark:bg-gray-800">
+                                    {searchedCandidates.length === 0 ? (
+                                        <p className="p-3 text-xs text-gray-500 italic">No candidates found matching query.</p>
+                                    ) : (
+                                        searchedCandidates.map(cand => {
+                                            const isAdded = newEmails.includes(cand.email) || (selectedInterview?.candidateEmails || []).includes(cand.email);
+                                            return (
+                                                <div key={cand.id} className="flex justify-between items-center p-3 text-xs">
+                                                    <div>
+                                                        <p className="font-bold">{cand.name}</p>
+                                                        <p className="text-gray-455 dark:text-gray-400">{cand.email} &bull; {cand.experienceYears} Yrs</p>
+                                                    </div>
+                                                    <button
+                                                        onClick={() => addDbCandidateToInvite(cand)}
+                                                        disabled={isAdded}
+                                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${isAdded ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600' : 'bg-primary hover:bg-primary-dark text-white dark:text-black border-primary'}`}
+                                                    >
+                                                        {isAdded ? 'Added' : <><i className="fas fa-plus mr-1"></i> Add</>}
+                                                    </button>
+                                                </div>
+                                            );
+                                        })
+                                    )}
+                                </div>
+                            )}
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <i className="fas fa-magic text-yellow-500 animate-pulse"></i> Suggested Database Matches
+                            </label>
+                            {suggestedCandidates.length === 0 ? (
+                                <p className="text-xs text-gray-500 italic p-3 bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 rounded-xl">
+                                    No database candidates match this interview's specifications.
+                                </p>
+                            ) : (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {suggestedCandidates.map(cand => {
+                                        const isAdded = newEmails.includes(cand.email) || (selectedInterview?.candidateEmails || []).includes(cand.email);
+                                        return (
+                                            <div key={cand.id} className="flex justify-between items-center p-3 text-xs bg-gray-50 dark:bg-gray-850/40 border border-gray-100 dark:border-gray-700 rounded-xl">
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="font-bold truncate text-gray-900 dark:text-white" title={cand.name}>{cand.name}</p>
+                                                    <p className="text-[10px] text-gray-400 truncate" title={cand.email}>{cand.email}</p>
+                                                    <span className="mt-1 inline-block text-[9px] font-bold text-green-600 dark:text-green-400">
+                                                        {cand.matchScore}% Match
+                                                    </span>
+                                                </div>
+                                                <button
+                                                    onClick={() => addDbCandidateToInvite(cand)}
+                                                    disabled={isAdded}
+                                                    className={`px-2 py-1 rounded-lg text-[9px] font-semibold border transition-all ${isAdded ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-205 dark:border-gray-700' : 'bg-primary hover:bg-primary-dark text-white dark:text-black border-primary'}`}
+                                                >
+                                                    {isAdded ? 'Added' : <i className="fas fa-plus text-[8px]"></i>}
+                                                </button>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
                         </div>
                     </div>
                     <div>
