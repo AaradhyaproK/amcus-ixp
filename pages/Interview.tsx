@@ -1638,6 +1638,45 @@ const CandidateInterviewFlow: React.FC = () => {
   const [speedStatus, setSpeedStatus] = useState<string | null>(null);
   const [interviewTerminated, setInterviewTerminated] = useState(false);
 
+  const checkMonthlyLimitExceeded = async (recruiterUID: string) => {
+    const recruiterDocSnap = await getDoc(doc(db, 'users', recruiterUID));
+    let monthlyLimit = 50; // Default limit
+    if (recruiterDocSnap.exists()) {
+      const uData = recruiterDocSnap.data();
+      if (uData.monthlyResponseLimit !== undefined) {
+        monthlyLimit = Number(uData.monthlyResponseLimit);
+      }
+    }
+
+    // Get all recruiter interviews
+    const interviewsQuery = query(collection(db, 'interviews'), where('recruiterUID', '==', recruiterUID));
+    const interviewsSnap = await getDocs(interviewsQuery);
+    const recruiterInterviews = interviewsSnap.docs.map(doc => doc.id);
+
+    // Fetch attempts for all recruiter interviews in parallel
+    let totalResponsesThisMonth = 0;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const attemptsPromises = recruiterInterviews.map(async (id) => {
+      const attemptsSnap = await getDocs(collection(db, 'interviews', id, 'attempts'));
+      attemptsSnap.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.submittedAt) {
+          const date = data.submittedAt.toDate ? data.submittedAt.toDate() : new Date(data.submittedAt.seconds * 1000);
+          if (date >= startOfMonth) {
+            totalResponsesThisMonth++;
+          }
+        }
+      });
+    });
+    await Promise.all(attemptsPromises);
+
+    if (totalResponsesThisMonth >= monthlyLimit) {
+      throw new Error(`This interview is currently suspended because the creator's monthly response quota (${monthlyLimit} responses) has been reached.`);
+    }
+  };
+
   // 1. Validate Access & Fetch Interview Details
   useEffect(() => {
     const validateAndInit = async () => {
@@ -1655,6 +1694,55 @@ const CandidateInterviewFlow: React.FC = () => {
         }
         
         const interviewData = { id: interviewDoc.id, ...interviewDoc.data() } as any;
+
+        if (interviewData.isStopped === true) {
+          throw new Error("This interview has been suspended/stopped by the administrator.");
+        }
+
+        // Check if the recruiter's active interview limit has been exceeded or account status is inactive
+        if (interviewData.recruiterUID) {
+          const recruiterDocSnap = await getDoc(doc(db, 'users', interviewData.recruiterUID));
+          let recruiterLimit = 5;
+          let isRecruiterActive = true;
+          if (recruiterDocSnap.exists()) {
+            const uData = recruiterDocSnap.data();
+            if (uData.interviewLimit !== undefined) {
+              recruiterLimit = Number(uData.interviewLimit);
+            }
+            if (uData.accountStatus === 'disabled') {
+              isRecruiterActive = false;
+            }
+          }
+          
+          if (!isRecruiterActive) {
+            throw new Error("This interview is currently unavailable because the creator's account is inactive.");
+          }
+          
+          const interviewsQuery = query(
+            collection(db, 'interviews'),
+            where('recruiterUID', '==', interviewData.recruiterUID)
+          );
+          const interviewsSnap = await getDocs(interviewsQuery);
+          const existingInterviews = interviewsSnap.docs.filter(doc => (doc.data() as any).isMock !== true);
+
+          if (existingInterviews.length > recruiterLimit) {
+            throw new Error("This interview is currently suspended because the recruiter's active interview limit has been exceeded.");
+          }
+
+          // Check monthly response limit
+          await checkMonthlyLimitExceeded(interviewData.recruiterUID);
+        }
+
+        // Check if the maximum responses limit has been met
+        if (interviewData.maxResponses !== undefined && interviewData.maxResponses !== '') {
+          const attemptsRef = collection(db, 'interviews', interviewId, 'attempts');
+          const attemptsSnap = await getDocs(attemptsRef);
+          const completedAttempts = attemptsSnap.size;
+
+          if (completedAttempts >= Number(interviewData.maxResponses)) {
+            throw new Error("This interview is no longer accepting responses as it has reached the maximum number of candidates.");
+          }
+        }
 
 
 
@@ -1684,6 +1772,32 @@ const CandidateInterviewFlow: React.FC = () => {
     setLoadingMsg("Processing your information...");
 
     try {
+      // Double check monthly response limit at submission time
+      if (interview && interview.recruiterUID) {
+        try {
+          await checkMonthlyLimitExceeded(interview.recruiterUID);
+        } catch (err: any) {
+          alert("❌ Maximum monthly response quota has been reached. You cannot proceed with this interview.");
+          setErrorMsg(err.message || "Monthly response limit exceeded.");
+          setStep('collect-info');
+          return;
+        }
+      }
+
+      // Double check max responses limit at submission time
+      if (interview && interview.maxResponses !== undefined && interview.maxResponses !== '') {
+        const attemptsRef = collection(db, 'interviews', interviewId!, 'attempts');
+        const attemptsSnap = await getDocs(attemptsRef);
+        const completedAttempts = attemptsSnap.size;
+
+        if (completedAttempts >= Number(interview.maxResponses)) {
+          alert("❌ Maximum number of candidate responses has been reached. You cannot proceed with this interview.");
+          setErrorMsg("This interview is no longer accepting responses as it has reached the maximum number of candidates.");
+          setStep('collect-info');
+          return;
+        }
+      }
+
       setLoadingMsg("Verifying attempt eligibility...");
       const attemptsRef = collection(db, 'interviews', interviewId!, 'attempts');
       

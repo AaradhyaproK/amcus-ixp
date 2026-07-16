@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, serverTimestamp, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../services/firebase';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -43,6 +43,7 @@ const CreateInterview: React.FC = () => {
     numQuestions: 5,
     difficulty: 'Medium',
     strictness: 'Medium',
+    maxResponses: '',
   });
 
   useEffect(() => {
@@ -80,7 +81,7 @@ const CreateInterview: React.FC = () => {
     setFormData(prev => {
       const updated = {
         ...prev,
-        [name]: ['experience', 'minExperience', 'maxExperience', 'numQuestions'].includes(name) ? Number(value) : value
+        [name]: ['experience', 'minExperience', 'maxExperience', 'numQuestions'].includes(name) ? Number(value) : (name === 'maxResponses' ? (value === '' ? '' : Number(value)) : value)
       };
       if (name === 'minExperience') {
         updated.experience = Number(value);
@@ -284,6 +285,30 @@ const CreateInterview: React.FC = () => {
     setLoading(true);
 
     try {
+      // Check recruiter active interview limit
+      const recruiterDocSnap = await getDoc(doc(db, 'users', user.uid));
+      let limit = 5; // default limit if not explicitly set
+      if (recruiterDocSnap.exists()) {
+        const uData = recruiterDocSnap.data();
+        if (uData.interviewLimit !== undefined) {
+          limit = Number(uData.interviewLimit);
+        }
+      }
+
+      // Count existing recruiter interviews
+      const interviewsQuery = query(
+        collection(db, 'interviews'),
+        where('recruiterUID', '==', user.uid)
+      );
+      const interviewsSnap = await getDocs(interviewsQuery);
+      const existingInterviews = interviewsSnap.docs.filter(doc => (doc.data() as any).isMock !== true);
+
+      if (existingInterviews.length >= limit) {
+        alert(`❌ Limit Reached: You have created ${existingInterviews.length} out of ${limit} allowed interviews. Please contact the administrator to increase your account limit.`);
+        setLoading(false);
+        return;
+      }
+
       // 1. Generate Interview ID, Link, and Access Code locally
       const newRand = Math.random().toString(36).substring(2, 15);
       const newInterviewLink = `${window.location.origin}/#/interview/${newRand}`;
@@ -613,7 +638,7 @@ const CreateInterview: React.FC = () => {
             </div>
           </div>
           
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="space-y-2 form-field">
               <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Difficulty Level</label>
               <select 
@@ -642,6 +667,21 @@ const CreateInterview: React.FC = () => {
                 <option value="Medium">Medium (Balanced)</option>
                 <option value="Hard">Hard (Strict feedback)</option>
               </select>
+            </div>
+
+            <div className="space-y-2 form-field">
+              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                Max Responses (Optional)
+              </label>
+              <input
+                type="number"
+                name="maxResponses"
+                min="1"
+                placeholder="Unlimited"
+                value={formData.maxResponses}
+                onChange={handleFormChange}
+                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+              />
             </div>
           </div>
 

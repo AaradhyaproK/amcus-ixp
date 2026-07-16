@@ -7,7 +7,7 @@ import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth'
 import { db, auth } from '../services/firebase';
 import { RevenueAreaChart, UserPieChart, JobBarChart } from '../components/AdminCharts';
 import { GShapeAnimation } from '../components/AdminAnimations';
-import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity, Database, Key, Globe, Copy, Check, Code, Server, TrendingUp } from 'lucide-react';
+import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle, Trash2, Bell, Sun, Moon, Monitor, Video, Menu, X, Search, ShieldCheck, ShieldX, BookOpen, MessageSquare as MessageSquareIcon, Bug, Star, Activity, Database, Key, Globe, Copy, Check, Code, Server, TrendingUp, Play, Pause } from 'lucide-react';
 import { useTheme } from '../context/ThemeContext';
 import { useMessageBox } from '../components/MessageBox';
 import Logo from '../components/Logo';
@@ -305,6 +305,54 @@ const AdminDashboard: React.FC = () => {
   const toggleEmailVerification = async (user: any) => {
     const newStatus = !user.adminVerified;
     try { await updateDoc(doc(db, 'users', user.id), { adminVerified: newStatus }); } catch (error) { console.error("Error updating verification:", error); }
+  };
+
+  const updateRecruiterLimit = async (userId: string, limit: number) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        interviewLimit: limit
+      });
+      messageBox.showSuccess('Recruiter interview limit updated!');
+    } catch (err) {
+      console.error('Error updating recruiter interview limit:', err);
+      messageBox.showError('Failed to update recruiter limit.');
+    }
+  };
+
+  const updateMonthlyLimit = async (userId: string, limit: number) => {
+    try {
+      await updateDoc(doc(db, 'users', userId), {
+        monthlyResponseLimit: limit
+      });
+      messageBox.showSuccess('Monthly response limit updated!');
+    } catch (err) {
+      console.error('Error updating monthly response limit:', err);
+      messageBox.showError('Failed to update monthly limit.');
+    }
+  };
+
+  const handleToggleJobStatus = async (jobId: string, currentStopped: boolean) => {
+    try {
+      await updateDoc(doc(db, 'interviews', jobId), {
+        isStopped: !currentStopped
+      });
+      messageBox.showSuccess(currentStopped ? 'Interview resumed!' : 'Interview stopped!');
+    } catch (err) {
+      console.error('Error toggling interview status:', err);
+      messageBox.showError('Failed to toggle interview status.');
+    }
+  };
+
+  const handleUpdateMaxResponses = async (jobId: string, limit: number) => {
+    try {
+      await updateDoc(doc(db, 'interviews', jobId), {
+        maxResponses: limit === 0 ? '' : limit
+      });
+      messageBox.showSuccess('Interview response limit updated!');
+    } catch (err) {
+      console.error('Error updating interview max responses:', err);
+      messageBox.showError('Failed to update response limit.');
+    }
   };
 
   const handleMarkContactRead = async (id: string) => {
@@ -1134,6 +1182,68 @@ const AdminDashboard: React.FC = () => {
                         {u.adminVerified ? 'Email Verified' : 'Not Verified'}
                       </span>
                     </div>
+                    {u.role === 'recruiter' && (
+                      <div className="flex items-center gap-2 mt-2 bg-gray-50 dark:bg-black/20 p-2 rounded-xl border border-gray-150 dark:border-white/5">
+                        <span className="text-xs text-gray-500 font-semibold">Active Interview Limit:</span>
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          <button
+                            onClick={() => updateRecruiterLimit(u.id, Math.max(0, (u.interviewLimit !== undefined ? u.interviewLimit : 5) - 1))}
+                            className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                            title="Decrease Limit"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="text"
+                            value={u.interviewLimit !== undefined ? u.interviewLimit : 5}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const num = parseInt(val);
+                              updateRecruiterLimit(u.id, isNaN(num) ? 0 : Math.max(0, num));
+                            }}
+                            className="w-12 bg-transparent border-none focus:outline-none text-sm font-bold font-mono text-center text-gray-900 dark:text-white"
+                          />
+                          <button
+                            onClick={() => updateRecruiterLimit(u.id, (u.interviewLimit !== undefined ? u.interviewLimit : 5) + 1)}
+                            className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                            title="Increase Limit"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    {u.role === 'recruiter' && (
+                      <div className="flex items-center gap-2 mt-2 bg-gray-50 dark:bg-black/20 p-2 rounded-xl border border-gray-150 dark:border-white/5">
+                        <span className="text-xs text-gray-500 font-semibold">Monthly Responses Limit:</span>
+                        <div className="flex items-center gap-1.5 ml-auto">
+                          <button
+                            onClick={() => updateMonthlyLimit(u.id, Math.max(0, (u.monthlyResponseLimit !== undefined ? u.monthlyResponseLimit : 50) - 5))}
+                            className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                            title="Decrease Limit by 5"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="text"
+                            value={u.monthlyResponseLimit !== undefined ? u.monthlyResponseLimit : 50}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              const num = parseInt(val);
+                              updateMonthlyLimit(u.id, isNaN(num) ? 0 : Math.max(0, num));
+                            }}
+                            className="w-12 bg-transparent border-none focus:outline-none text-sm font-bold font-mono text-center text-gray-900 dark:text-white"
+                          />
+                          <button
+                            onClick={() => updateMonthlyLimit(u.id, (u.monthlyResponseLimit !== undefined ? u.monthlyResponseLimit : 50) + 5)}
+                            className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                            title="Increase Limit by 5"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
                       <span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-white/10 capitalize">{u.role}</span>
                       {u.role !== 'admin' && (
@@ -1161,6 +1271,8 @@ const AdminDashboard: React.FC = () => {
                       <th className="px-4 lg:px-6 py-3">User</th>
                       <th className="px-4 lg:px-6 py-3">Role</th>
                       <th className="px-4 lg:px-6 py-3">Status</th>
+                      <th className="px-4 lg:px-6 py-3">Interview Limit</th>
+                      <th className="px-4 lg:px-6 py-3">Monthly Limit</th>
                       <th className="px-4 lg:px-6 py-3">Email Verified</th>
                       <th className="px-4 lg:px-6 py-3 text-right">Actions</th>
                     </tr>
@@ -1187,6 +1299,70 @@ const AdminDashboard: React.FC = () => {
                           <span className={`px-2 py-1 rounded-full text-xs font-bold ${u.accountStatus === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700'}`}>
                             {u.accountStatus || 'active'}
                           </span>
+                        </td>
+                         <td className="px-4 lg:px-6 py-4">
+                          {u.role === 'recruiter' ? (
+                            <div className="flex items-center gap-1.5 bg-gray-50 dark:bg-black/20 p-1.5 rounded-xl border border-border w-fit shadow-sm">
+                              <button
+                                onClick={() => updateRecruiterLimit(u.id, Math.max(0, (u.interviewLimit !== undefined ? u.interviewLimit : 5) - 1))}
+                                className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                                title="Decrease Limit"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="text"
+                                value={u.interviewLimit !== undefined ? u.interviewLimit : 5}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const num = parseInt(val);
+                                  updateRecruiterLimit(u.id, isNaN(num) ? 0 : Math.max(0, num));
+                                }}
+                                className="w-12 bg-transparent border-none focus:outline-none text-sm font-bold font-mono text-center text-gray-900 dark:text-white"
+                              />
+                              <button
+                                onClick={() => updateRecruiterLimit(u.id, (u.interviewLimit !== undefined ? u.interviewLimit : 5) + 1)}
+                                className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                                title="Increase Limit"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">N/A</span>
+                          )}
+                        </td>
+                        <td className="px-4 lg:px-6 py-4">
+                          {u.role === 'recruiter' ? (
+                            <div className="flex items-center gap-1.5 bg-gray-55 dark:bg-black/20 p-1.5 rounded-xl border border-border w-fit shadow-sm">
+                              <button
+                                onClick={() => updateMonthlyLimit(u.id, Math.max(0, (u.monthlyResponseLimit !== undefined ? u.monthlyResponseLimit : 50) - 5))}
+                                className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                                title="Decrease Limit by 5"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="text"
+                                value={u.monthlyResponseLimit !== undefined ? u.monthlyResponseLimit : 50}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  const num = parseInt(val);
+                                  updateMonthlyLimit(u.id, isNaN(num) ? 0 : Math.max(0, num));
+                                }}
+                                className="w-12 bg-transparent border-none focus:outline-none text-sm font-bold font-mono text-center text-gray-900 dark:text-white"
+                              />
+                              <button
+                                onClick={() => updateMonthlyLimit(u.id, (u.monthlyResponseLimit !== undefined ? u.monthlyResponseLimit : 50) + 5)}
+                                className="w-6 h-6 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                                title="Increase Limit by 5"
+                              >
+                                +
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400 text-xs">N/A</span>
+                          )}
                         </td>
                         <td className="px-4 lg:px-6 py-4">
                           <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${u.adminVerified ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'}`}>
@@ -1236,8 +1412,21 @@ const AdminDashboard: React.FC = () => {
                 {filteredData().map(job => (
                   <div key={job.id} className="animated-item p-4 sm:p-5 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm hover:border-primary/50 transition-all group relative flex flex-col">
                     <div className="flex justify-between items-start mb-2 gap-2">
-                      <h3 className="font-bold text-base sm:text-lg truncate" title={job.title}>{job.title}</h3>
-                      <button onClick={() => handleDeleteJob(job.id)} className="shrink-0 text-gray-400 hover:text-red-500 transition-colors bg-gray-100 dark:bg-white/5 p-1.5 rounded-lg"><Trash2 size={14} /></button>
+                      <h3 className="font-bold text-base sm:text-lg truncate flex-1" title={job.title}>{job.title}</h3>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button 
+                          onClick={() => handleToggleJobStatus(job.id, job.isStopped || false)} 
+                          className={`p-1.5 rounded-lg transition-colors ${
+                            job.isStopped 
+                              ? 'text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/20 hover:bg-green-100' 
+                              : 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/20 hover:bg-amber-100'
+                          }`}
+                          title={job.isStopped ? "Resume Interview (allow candidates to take test)" : "Stop Interview (block candidates from taking test)"}
+                        >
+                          {job.isStopped ? <Play size={14} /> : <Pause size={14} />}
+                        </button>
+                        <button onClick={() => handleDeleteJob(job.id)} className="text-gray-400 hover:text-red-500 transition-colors bg-gray-100 dark:bg-white/5 p-1.5 rounded-lg"><Trash2 size={14} /></button>
+                      </div>
                     </div>
                     <p className="text-gray-500 text-xs sm:text-sm mb-3 truncate">{job.department || job.employmentType || 'Recruiter Posted'}</p>
                     
@@ -1259,9 +1448,50 @@ const AdminDashboard: React.FC = () => {
                       )}
                     </div>
 
+                    <div className="flex items-center justify-between mb-4 bg-gray-50 dark:bg-black/20 p-2 rounded-xl border border-gray-150 dark:border-white/5">
+                      <span className="text-xs text-gray-500 font-semibold">Max Responses:</span>
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                          onClick={() => handleUpdateMaxResponses(job.id, Math.max(0, (job.maxResponses !== undefined && job.maxResponses !== '' ? Number(job.maxResponses) : 0) - 1))}
+                          className="w-5 h-5 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                          title="Decrease Limit"
+                        >
+                          -
+                        </button>
+                        <input
+                          type="text"
+                          value={job.maxResponses !== undefined && job.maxResponses !== '' ? job.maxResponses : ''}
+                          placeholder="∞"
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            if (val === '') {
+                              handleUpdateMaxResponses(job.id, 0);
+                            } else {
+                              const num = parseInt(val);
+                              if (!isNaN(num)) {
+                                handleUpdateMaxResponses(job.id, Math.max(0, num));
+                              }
+                            }
+                          }}
+                          className="w-10 bg-transparent border-none focus:outline-none text-xs font-bold font-mono text-center text-gray-900 dark:text-white"
+                        />
+                        <button
+                          onClick={() => handleUpdateMaxResponses(job.id, (job.maxResponses !== undefined && job.maxResponses !== '' ? Number(job.maxResponses) : 0) + 1)}
+                          className="w-5 h-5 flex items-center justify-center bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 rounded-lg text-gray-600 dark:text-gray-300 font-bold transition-colors border border-border shadow-sm active:scale-90"
+                          title="Increase Limit"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-400 mt-auto pt-2 border-t border-gray-100 dark:border-white/5">
                       <span>{job.createdAt?.toDate ? job.createdAt.toDate().toLocaleDateString() : 'Just now'}</span>
-                      <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 dark:bg-green-900/20 text-green-600 rounded-md font-semibold">Active</span>
+                      {job.isStopped ? (
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-red-100 dark:bg-red-900/20 text-red-600 rounded-md font-semibold">Stopped</span>
+                      ) : (
+                        <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-green-100 dark:bg-green-900/20 text-green-600 rounded-md font-semibold">Active</span>
+                      )}
                     </div>
                   </div>
                 ))}

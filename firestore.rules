@@ -16,9 +16,8 @@ service cloud.firestore {
       // Existing: Self management
       allow read, update, delete: if request.auth != null && request.auth.uid == userId;
 
-      // Existing: Recruiter permissions
-      allow read: if request.auth != null
-                  && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'recruiter';
+      // Allow anyone to read user details (needed for candidate/recruiter active limits verification)
+      allow read: if true;
 
       allow update: if request.auth != null
                     && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'recruiter'

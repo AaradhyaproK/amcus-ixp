@@ -850,6 +850,22 @@ Output format (MUST be valid JSON):
                                     </div>
                                 </div>
                             )}
+
+                            {/* Responses count / limit Badge */}
+                            <div className="relative group">
+                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded border flex items-center gap-1 shrink-0 ${
+                                    interview.maxResponses && (submissionsMap[interview.id]?.length || 0) >= Number(interview.maxResponses)
+                                        ? 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-100/50 dark:border-red-900/20'
+                                        : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-100/50 dark:border-emerald-900/20'
+                                }`}>
+                                    <i className="fas fa-users"></i> Responses: {submissionsMap[interview.id]?.length || 0}
+                                    {interview.maxResponses ? ` / ${interview.maxResponses}` : ' (Unlimited)'}
+                                </span>
+                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    Responses: {submissionsMap[interview.id]?.length || 0}
+                                    {interview.maxResponses ? ` Limit: ${interview.maxResponses}` : ' Limit: Unlimited'}
+                                </div>
+                            </div>
                         </div>
  
                         {/* Job Description (JD) with Scrollbar */}
