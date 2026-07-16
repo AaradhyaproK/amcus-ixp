@@ -10,6 +10,7 @@ import { LanguageSelector } from './LanguageSelector';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
 import DayNightToggle from '../components/DayNightToggle';
+import Logo from '../components/Logo';
 import * as pdfjsLib from 'pdfjs-dist';
 
 // Setup PDF.js worker to enable PDF parsing
@@ -1637,6 +1638,7 @@ const CandidateInterviewFlow: React.FC = () => {
   const [tabSwitches, setTabSwitches] = useState(0);
   const [speedStatus, setSpeedStatus] = useState<string | null>(null);
   const [interviewTerminated, setInterviewTerminated] = useState(false);
+  const [recruiterLogoUrl, setRecruiterLogoUrl] = useState<string | null>(null);
 
   const checkMonthlyLimitExceeded = async (recruiterUID: string) => {
     const recruiterDocSnap = await getDoc(doc(db, 'users', recruiterUID));
@@ -1711,6 +1713,9 @@ const CandidateInterviewFlow: React.FC = () => {
             }
             if (uData.accountStatus === 'disabled') {
               isRecruiterActive = false;
+            }
+            if (uData.companyLogo) {
+              setRecruiterLogoUrl(uData.companyLogo);
             }
           }
           
@@ -1973,10 +1978,16 @@ const CandidateInterviewFlow: React.FC = () => {
 
   // --- RENDER ---
   const Container = ({ children }: { children: React.ReactNode }) => (
-    <div className="interview-flow-shell fixed inset-0 z-[9999] overflow-y-auto bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 flex flex-col items-center justify-start py-12 px-4 transition-colors duration-500">
-      <div className="absolute top-4 right-4 z-[10000]">
+    <div className="interview-flow-shell fixed inset-0 z-[9999] overflow-y-auto bg-gray-50 dark:bg-slate-950 text-gray-800 dark:text-gray-100 flex flex-col items-center justify-start pt-24 pb-12 px-4 transition-colors duration-500">
+      <header className="absolute top-0 left-0 right-0 h-16 border-b border-gray-200/50 dark:border-white/5 bg-white/70 dark:bg-slate-950/70 backdrop-blur-md flex items-center justify-between px-6 z-[10000]">
+        {recruiterLogoUrl ? (
+          <img src={recruiterLogoUrl} alt="Company Logo" className="h-9 object-contain" />
+        ) : (
+          <Logo />
+        )}
         <DayNightToggle />
-      </div>      {children}
+      </header>
+      {children}
     </div>
   );
 

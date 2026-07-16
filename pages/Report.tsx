@@ -114,6 +114,7 @@ const InterviewReport: React.FC = () => {
   const [activeVideoIndex, setActiveVideoIndex] = useState<number | null>(null);
   const [showResumeInVideo, setShowResumeInVideo] = useState<boolean>(false);
   const [isCompareMode, setIsCompareMode] = useState(false);
+  const [recruiterLogoUrl, setRecruiterLogoUrl] = useState<string | null>(null);
 
   const isStaff = userProfile?.role === 'recruiter' || userProfile?.role === 'admin';
 
@@ -265,6 +266,12 @@ const InterviewReport: React.FC = () => {
             const interviewDocSnap = await getDoc(doc(db, 'interviews', interviewId));
             if (interviewDocSnap.exists()) {
               const interviewData = interviewDocSnap.data();
+              if (interviewData.recruiterUID) {
+                const recruiterDocSnap = await getDoc(doc(db, 'users', interviewData.recruiterUID));
+                if (recruiterDocSnap.exists() && recruiterDocSnap.data().companyLogo) {
+                  setRecruiterLogoUrl(recruiterDocSnap.data().companyLogo);
+                }
+              }
               if (!submissionData.clientAccessExpiresAt && interviewData.clientAccessExpiresAt) {
                 submissionData.clientAccessExpiresAt = interviewData.clientAccessExpiresAt;
               }
@@ -278,6 +285,12 @@ const InterviewReport: React.FC = () => {
           const docSnap = await getDoc(docRef);
           if (docSnap.exists()) {
             const data = docSnap.data();
+            if (data.recruiterUID) {
+              const recruiterDocSnap = await getDoc(doc(db, 'users', data.recruiterUID));
+              if (recruiterDocSnap.exists() && recruiterDocSnap.data().companyLogo) {
+                setRecruiterLogoUrl(recruiterDocSnap.data().companyLogo);
+              }
+            }
             // Map legacy fields to current InterviewSubmission format to avoid breaks
             const mappedSubmission: any = {
               id: docSnap.id,
@@ -855,17 +868,25 @@ const InterviewReport: React.FC = () => {
                         className="flex items-center hover:opacity-85 transition-opacity"
                         title="Visit InterviewXpert"
                     >
-                        <img 
-                            src={isDark ? 'http://localhost:3000/logo-partnership-dark.png' : 'http://localhost:3000/logo-partnership-light.png'} 
-                            alt="InterviewXpert Logo" 
-                            className="h-7 sm:h-9 object-contain"
-                            onError={(e) => {
-                                const origin = window.location.origin;
-                                e.currentTarget.src = isDark 
-                                    ? `${origin}/logo-partnership-dark.png` 
-                                    : `${origin}/logo-partnership-light.png`;
-                            }}
-                        />
+                        {recruiterLogoUrl ? (
+                          <img 
+                              src={recruiterLogoUrl} 
+                              alt="Company Logo" 
+                              className="h-7 sm:h-9 object-contain" 
+                          />
+                        ) : (
+                          <img 
+                              src={isDark ? 'http://localhost:3000/logo-partnership-dark.png' : 'http://localhost:3000/logo-partnership-light.png'} 
+                              alt="InterviewXpert Logo" 
+                              className="h-7 sm:h-9 object-contain"
+                              onError={(e) => {
+                                  const origin = window.location.origin;
+                                  e.currentTarget.src = isDark 
+                                      ? `${origin}/logo-partnership-dark.png` 
+                                      : `${origin}/logo-partnership-light.png`;
+                              }}
+                          />
+                        )}
                     </a>
                 </div>
                 <div className="flex items-center gap-3">

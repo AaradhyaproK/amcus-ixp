@@ -11,6 +11,7 @@ import { Users, FileText, DollarSign, UserPlus, Briefcase, CheckCircle, XCircle,
 import { useTheme } from '../context/ThemeContext';
 import { useMessageBox } from '../components/MessageBox';
 import Logo from '../components/Logo';
+import { uploadToCloudinary } from '../services/api';
 
 const AdminDashboard: React.FC = () => {
   // Real-time Data State
@@ -31,6 +32,7 @@ const AdminDashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'requests' | 'users' | 'jobs' | 'transactions' | 'submissions' | 'reviews' | 'api' | 'dbAccess'>('overview');
   const [dbSubTab, setDbSubTab] = useState<'submissions' | 'interviews' | 'users'>('submissions');
   const [processingId, setProcessingId] = useState<string | null>(null);
+  const [logoUploadingId, setLogoUploadingId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'candidate' | 'recruiter'>('all');
   const { theme, setTheme } = useTheme();
@@ -328,6 +330,31 @@ const AdminDashboard: React.FC = () => {
     } catch (err) {
       console.error('Error updating monthly response limit:', err);
       messageBox.showError('Failed to update monthly limit.');
+    }
+  };
+
+  const handleLogoUpload = async (userId: string, file: File) => {
+    if (!file) return;
+    setLogoUploadingId(userId);
+    try {
+      const uploadResult = await uploadToCloudinary(file, 'auto').catch((err) => {
+          console.error("Cloudinary upload failed inside admin logo flow:", err);
+          return null;
+      });
+      const logoUrl = typeof uploadResult === 'string' ? uploadResult : uploadResult?.url || '';
+      if (!logoUrl) {
+        throw new Error("Upload returned empty result");
+      }
+      
+      await updateDoc(doc(db, 'users', userId), {
+        companyLogo: logoUrl
+      });
+      messageBox.showSuccess('Company logo updated successfully!');
+    } catch (err: any) {
+      console.error('Error uploading logo:', err);
+      messageBox.showError('Failed to upload logo: ' + (err.message || ''));
+    } finally {
+      setLogoUploadingId(null);
     }
   };
 
@@ -1156,19 +1183,47 @@ const AdminDashboard: React.FC = () => {
               <div className="block sm:hidden space-y-3">
                 {filteredData().map(u => (
                   <div key={u.id} className="animated-item p-4 rounded-xl bg-white dark:bg-zinc-900 border border-gray-200 dark:border-white/5 shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium truncate">{u.fullname}</div>
-                        <div className="text-xs text-gray-500 truncate">{u.email}</div>
-                        <div 
-                          className="flex items-center gap-1 mt-1 font-mono text-[9px] text-gray-400 dark:text-gray-400/80 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded w-fit cursor-pointer transition-colors" 
-                          title="Click to copy User UID"
-                          onClick={() => {
-                            navigator.clipboard.writeText(u.id);
-                            messageBox.showSuccess(`Copied UID for ${u.fullname}!`);
-                          }}
-                        >
-                          <span>UID: {u.id}</span>
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {u.role === 'recruiter' && (
+                          <div className="relative group shrink-0 w-12 h-12 rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-zinc-800 flex items-center justify-center shadow-sm">
+                            {u.companyLogo ? (
+                              <img src={u.companyLogo} alt="Logo" className="w-full h-full object-contain" />
+                            ) : (
+                              <i className="fas fa-building text-gray-400 dark:text-gray-500 text-base"></i>
+                            )}
+                            
+                            <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                              {logoUploadingId === u.id ? (
+                                <i className="fas fa-spinner fa-spin text-white text-xs"></i>
+                              ) : (
+                                <i className="fas fa-camera text-white text-xs"></i>
+                              )}
+                              <input
+                                  type="file"
+                                  accept="image/*"
+                                  className="hidden"
+                                  onChange={(e) => {
+                                    const file = e.target.files?.[0];
+                                    if (file) handleLogoUpload(u.id, file);
+                                  }}
+                              />
+                            </label>
+                          </div>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium truncate">{u.fullname}</div>
+                          <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                          <div 
+                            className="flex items-center gap-1 mt-1 font-mono text-[9px] text-gray-400 dark:text-gray-400/80 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded w-fit cursor-pointer transition-colors" 
+                            title="Click to copy User UID"
+                            onClick={() => {
+                              navigator.clipboard.writeText(u.id);
+                              messageBox.showSuccess(`Copied UID for ${u.fullname}!`);
+                            }}
+                          >
+                            <span>UID: {u.id}</span>
+                          </div>
                         </div>
                       </div>
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-[10px] font-bold ${u.accountStatus === 'active' ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-red-100 text-red-700'}`}>
@@ -1281,17 +1336,47 @@ const AdminDashboard: React.FC = () => {
                     {filteredData().map(u => (
                       <tr key={u.id} className="animated-item hover:bg-gray-50 dark:hover:bg-white/5 transition-colors">
                         <td className="px-4 lg:px-6 py-4">
-                          <div className="font-medium">{u.fullname}</div>
-                          <div className="text-xs text-gray-500">{u.email}</div>
-                          <div 
-                            className="flex items-center gap-1 mt-1.5 font-mono text-[10px] text-gray-400 dark:text-gray-400/80 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded w-fit cursor-pointer transition-colors" 
-                            title="Click to copy User UID"
-                            onClick={() => {
-                              navigator.clipboard.writeText(u.id);
-                              messageBox.showSuccess(`Copied UID for ${u.fullname}!`);
-                            }}
-                          >
-                            <span>UID: {u.id}</span>
+                          <div className="flex items-center gap-3">
+                            {u.role === 'recruiter' && (
+                              <div className="relative group shrink-0 w-10 h-10 rounded-xl overflow-hidden border border-gray-200 dark:border-white/5 bg-gray-50 dark:bg-zinc-800 flex items-center justify-center shadow-sm">
+                                {u.companyLogo ? (
+                                  <img src={u.companyLogo} alt="Logo" className="w-full h-full object-contain" />
+                                ) : (
+                                  <i className="fas fa-building text-gray-400 dark:text-gray-500 text-sm"></i>
+                                )}
+                                
+                                <label className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center cursor-pointer transition-opacity">
+                                  {logoUploadingId === u.id ? (
+                                    <i className="fas fa-spinner fa-spin text-white text-[10px]"></i>
+                                  ) : (
+                                    <i className="fas fa-camera text-white text-[10px]"></i>
+                                  )}
+                                  <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        if (file) handleLogoUpload(u.id, file);
+                                      }}
+                                  />
+                                </label>
+                              </div>
+                            )}
+                            <div>
+                              <div className="font-medium">{u.fullname}</div>
+                              <div className="text-xs text-gray-500">{u.email}</div>
+                              <div 
+                                className="flex items-center gap-1 mt-1 font-mono text-[9px] text-gray-400 dark:text-gray-400/80 bg-gray-50 dark:bg-black/20 hover:bg-gray-100 dark:hover:bg-white/5 border border-gray-200 dark:border-white/5 px-2 py-0.5 rounded w-fit cursor-pointer transition-colors" 
+                                title="Click to copy User UID"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(u.id);
+                                  messageBox.showSuccess(`Copied UID for ${u.fullname}!`);
+                                }}
+                              >
+                                <span>UID: {u.id}</span>
+                              </div>
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 lg:px-6 py-4"><span className="px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-white/10 capitalize">{u.role}</span></td>

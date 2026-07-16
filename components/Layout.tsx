@@ -54,7 +54,11 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <div className="flex-shrink-0 flex items-center">
               <Link to="/" className="flex items-center group">
                 <div className="w-[132px] sm:w-[164px] flex items-center justify-center transition-all duration-300">
-                  <Logo className="w-full h-auto" />
+                  {userProfile?.companyLogo ? (
+                    <img src={userProfile.companyLogo} alt="Company Logo" className="h-9 w-auto max-w-full object-contain" />
+                  ) : (
+                    <Logo className="w-full h-auto" />
+                  )}
                 </div>
               </Link>
             </div>
@@ -202,7 +206,11 @@ const LayoutContent: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="flex items-center gap-2 opacity-60 hover:opacity-100 transition-opacity">
-              <Logo className="w-[124px] sm:w-[148px] h-auto" />
+              {userProfile?.companyLogo ? (
+                <img src={userProfile.companyLogo} alt="Company Logo" className="h-8 w-auto max-w-[148px] object-contain" />
+              ) : (
+                <Logo className="w-[124px] sm:w-[148px] h-auto" />
+              )}
             </div>
 
             <div className="flex items-center gap-3">
