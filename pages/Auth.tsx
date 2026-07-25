@@ -85,7 +85,7 @@ const AuthPage: React.FC = () => {
       const userRole = userDoc.data()?.role;
       if (userRole !== 'recruiter' && userRole !== 'admin') {
         await signOut(auth);
-        setError('This Dsauce portal is only for recruiters and admins. Candidates should use the interview or assessment link sent to them.');
+        setError('This portal is only for recruiters and admins. Candidates should use the interview or assessment link sent to them.');
         return;
       }
 
@@ -176,7 +176,7 @@ const AuthPage: React.FC = () => {
                   {isReset
                     ? 'Enter your email to receive a reset link'
                     : isLogin
-                      ? 'Login to access the Dsauce recruiter or admin portal'
+                      ? 'Login to access the recruiter or admin portal'
                       : 'Submit your details for recruiter account approval'}
                 </p>
               </div>
@@ -427,7 +427,7 @@ const AuthPage: React.FC = () => {
                   ref={descRef}
                   className="text-zinc-400 text-base leading-relaxed max-w-lg mb-8 opacity-0"
                 >
-                  Manage Dsauce hiring workflows, recruiter access, and admin operations from one secure portal.
+                  Manage hiring workflows, recruiter access, and admin operations from one secure portal.
                 </p>
 
                 <div ref={featuresRef} className="space-y-4">
