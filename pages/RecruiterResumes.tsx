@@ -6,6 +6,7 @@ import { uploadToCloudinary } from '../services/api';
 import { extractTextFromPdf } from './pdfUtils';
 import { grokGenerateText } from '../services/grokService';
 import { sendInterviewInvitations } from '../services/brevoService';
+import { sendBulkWhatsAppInvitations } from '../services/wasenderService';
 import { useMessageBox } from '../components/MessageBox';
 import gsap from 'gsap';
 
@@ -170,7 +171,20 @@ const RecruiterResumes: React.FC = () => {
         throw new Error(mailResult.error || 'Failed to send emails.');
       }
 
-      // 2. Update/create the interview document in Firestore
+      // 2. Send WhatsApp invitations via WasenderAPI for candidates with valid phone numbers
+      const candidatesWithPhones = selectedProfiles.filter((c) => c.phone && c.phone.trim() !== '' && c.phone !== 'N/A');
+      let waCount = 0;
+      if (candidatesWithPhones.length > 0) {
+        const waResult = await sendBulkWhatsAppInvitations(
+          candidatesWithPhones.map((c) => ({ phone: c.phone, name: c.name, email: c.email })),
+          job.title,
+          link,
+          code
+        );
+        waCount = waResult.successCount;
+      }
+
+      // 3. Update/create the interview document in Firestore
       const interviewRef = doc(db, 'interviews', job.id);
       const interviewSnap = await getDoc(interviewRef);
 
@@ -192,7 +206,7 @@ const RecruiterResumes: React.FC = () => {
         });
       }
 
-      messageBox.showSuccess(`Successfully sent ${mailResult.totalEmails} invitation(s)!`);
+      messageBox.showSuccess(`Successfully sent ${mailResult.totalEmails} email(s)${waCount > 0 ? ` & ${waCount} WhatsApp invite(s)` : ''}!`);
       setSelectedCandidates([]); // Clear selection
     } catch (err: any) {
       console.error('Error sending invitations:', err);

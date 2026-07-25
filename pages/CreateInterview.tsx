@@ -8,6 +8,8 @@ import { SKILL_OPTIONS } from './Profile';
 import * as pdfjsLib from 'pdfjs-dist';
 
 import { sendInterviewInvitations } from '../services/brevoService';
+import { sendBulkWhatsAppInvitations, extractPhoneFromText } from '../services/wasenderService';
+import { addDoc } from 'firebase/firestore';
 
 // Setup PDF.js worker to enable PDF parsing
 pdfjsLib.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -18,7 +20,12 @@ const CreateInterview: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [skillSearch, setSkillSearch] = useState('');
   const [candidateEmails, setCandidateEmails] = useState<string[]>([]);
+  const [candidatePhones, setCandidatePhones] = useState<Record<string, string>>({});
   const [currentEmail, setCurrentEmail] = useState('');
+  const [currentPhone, setCurrentPhone] = useState('');
+  const [editingCandidateEmailKey, setEditingCandidateEmailKey] = useState<string | null>(null);
+  const [editedEmailInput, setEditedEmailInput] = useState('');
+  const [editedPhoneInput, setEditedPhoneInput] = useState('');
   const [parsingJd, setParsingJd] = useState(false);
   const [parsingResumes, setParsingResumes] = useState(false);
   const [sendingEmails, setSendingEmails] = useState(false);
@@ -141,14 +148,39 @@ const CreateInterview: React.FC = () => {
   };
 
   const handleAddEmail = () => {
-    if (currentEmail && !candidateEmails.includes(currentEmail)) {
-      setCandidateEmails([...candidateEmails, currentEmail]);
+    if (currentEmail && !candidateEmails.includes(currentEmail.trim().toLowerCase())) {
+      const lower = currentEmail.trim().toLowerCase();
+      setCandidateEmails(prev => [...prev, lower]);
+      if (currentPhone.trim()) {
+        setCandidatePhones(prev => ({ ...prev, [lower]: currentPhone.trim() }));
+      }
       setCurrentEmail('');
+      setCurrentPhone('');
     }
   };
 
   const handleRemoveEmail = (emailToRemove: string) => {
-    setCandidateEmails(candidateEmails.filter(email => email !== emailToRemove));
+    setCandidateEmails(prev => prev.filter(e => e.toLowerCase() !== emailToRemove.toLowerCase()));
+    setCandidatePhones(prev => {
+      const copy = { ...prev };
+      delete copy[emailToRemove.toLowerCase()];
+      return copy;
+    });
+  };
+
+  const handleSaveCandidateEdit = (oldEmail: string) => {
+    const trimmedEmail = editedEmailInput.trim().toLowerCase();
+    const trimmedPhone = editedPhoneInput.trim();
+    if (!trimmedEmail) return;
+
+    setCandidateEmails(prev => prev.map(e => e.toLowerCase() === oldEmail.toLowerCase() ? trimmedEmail : e));
+    setCandidatePhones(prev => {
+      const copy = { ...prev };
+      delete copy[oldEmail.toLowerCase()];
+      if (trimmedPhone) copy[trimmedEmail] = trimmedPhone;
+      return copy;
+    });
+    setEditingCandidateEmailKey(null);
   };
 
   const handleJDUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -250,14 +282,47 @@ const CreateInterview: React.FC = () => {
 
         const emailRegex = /([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/gi;
         const foundEmails = text.match(emailRegex);
+        const extractedPhone = extractPhoneFromText(text);
 
         if (foundEmails) {
-          foundEmails.forEach(email => {
+          for (const email of foundEmails) {
             const lowerEmail = email.toLowerCase();
             if (!candidateEmails.includes(lowerEmail) && !newEmailsFound.includes(lowerEmail)) {
               newEmailsFound.push(lowerEmail);
+
+              if (extractedPhone && extractedPhone !== 'N/A') {
+                setCandidatePhones(prev => ({ ...prev, [lowerEmail]: extractedPhone }));
+              }
+
+              // Auto save/sync candidate contact to database
+              if (user && extractedPhone && extractedPhone !== 'N/A') {
+                try {
+                  const qExist = query(
+                    collection(db, 'candidateResumes'),
+                    where('recruiterUID', '==', user.uid),
+                    where('email', '==', lowerEmail)
+                  );
+                  const existSnap = await getDocs(qExist);
+                  if (existSnap.empty) {
+                    const derivedName = lowerEmail.split('@')[0].replace(/[._-]/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ');
+                    await addDoc(collection(db, 'candidateResumes'), {
+                      recruiterUID: user.uid,
+                      name: derivedName,
+                      email: lowerEmail,
+                      phone: extractedPhone,
+                      skills: [],
+                      experienceYears: 0,
+                      summary: 'Auto-parsed candidate profile from resume upload.',
+                      fileName: file.name,
+                      createdAt: serverTimestamp(),
+                    });
+                  }
+                } catch (dbErr) {
+                  console.error('Error auto-syncing candidate resume contact:', dbErr);
+                }
+              }
             }
-          });
+          }
         }
         filesProcessed++;
       } catch (error) {
@@ -315,11 +380,17 @@ const CreateInterview: React.FC = () => {
       const newAccessCode = Math.random().toString(36).substring(2, 8).toUpperCase();
 
       // 2. Save to Firestore
+      const candidateData = candidateEmails.map(email => ({
+        email: email.toLowerCase(),
+        phone: candidatePhones[email.toLowerCase()] || 'N/A'
+      }));
+
       await setDoc(doc(db, 'interviews', newRand), {
         ...formData,
         manualQuestions,
         customFields,
         candidateEmails,
+        candidateData,
         interviewLink: newInterviewLink,
         accessCode: newAccessCode,
         recruiterUID: user.uid,
@@ -327,7 +398,7 @@ const CreateInterview: React.FC = () => {
         isMock: false,
       });
 
-      // 3. Send invitation emails if candidates are present
+      // 3. Send invitation emails and WhatsApp messages if candidates are present
       if (candidateEmails.length > 0) {
         setSendingEmails(true);
         try {
@@ -342,7 +413,28 @@ const CreateInterview: React.FC = () => {
             console.log(`[Brevo] Successfully sent ${result.totalEmails} invitation email(s)!`);
           } else {
             console.warn(`[Brevo] Partial failure sending emails: ${result.error}`);
-            alert(`⚠️ Interview created, but failed to send some emails: ${result.error}`);
+          }
+
+          // Fetch stored candidate phone numbers
+          try {
+            const phoneCandidates: Array<{ phone: string; name?: string; email?: string }> = candidateEmails
+              .map(email => ({
+                email: email.toLowerCase(),
+                phone: candidatePhones[email.toLowerCase()] || 'N/A'
+              }))
+              .filter(c => c.phone && c.phone !== 'N/A');
+
+            if (phoneCandidates.length > 0) {
+              const waRes = await sendBulkWhatsAppInvitations(
+                phoneCandidates,
+                formData.title,
+                newInterviewLink,
+                newAccessCode
+              );
+              console.log(`[WasenderAPI] WhatsApp invites sent: ${waRes.successCount}`);
+            }
+          } catch (waErr) {
+            console.error('[WasenderAPI] WhatsApp dispatch error:', waErr);
           }
         } catch (err: any) {
           console.error('[Brevo] Email sending error:', err);
@@ -368,76 +460,78 @@ const CreateInterview: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="text-center mb-8 create-interview-header">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">Create a New Interview</h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-2">Schedule an interview and send invitations to candidates.</p>
+        <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">Create a New Interview</h1>
+        <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Configure candidate evaluation requirements, parameters, and access permissions.</p>
       </div>
 
-      <div className="bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 p-8 shadow-xl dark:shadow-none create-interview-form">
-        <div className="p-4 bg-indigo-50 dark:bg-indigo-900/10 rounded-xl border border-indigo-200 dark:border-indigo-800/50 mb-6 form-field">
-            <h4 className="font-bold text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-2">
-                <i className="fas fa-magic"></i> AI Autofill
+      <div className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 p-8 shadow-sm create-interview-form">
+        {/* AI Autofill Banner */}
+        <div className="p-5 bg-gray-50/80 dark:bg-zinc-950/60 rounded-xl border border-gray-200 dark:border-zinc-800 mb-6 form-field">
+            <h4 className="font-bold text-gray-900 dark:text-white mb-1 flex items-center gap-2 text-sm">
+                <i className="fas fa-sparkles text-primary"></i> AI Job Description Autofill
             </h4>
-            <p className="text-sm text-indigo-600 dark:text-indigo-400 mb-4">
-                Save time by uploading a Job Description (PDF/TXT). The AI will automatically fill out the form for you.
+            <p className="text-xs text-gray-500 dark:text-zinc-400 mb-4">
+                Upload a Job Description (PDF/TXT). The AI will parse details and automatically fill out the form for you.
             </p>
-            <label htmlFor="jd-upload" className={`w-full flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-slate-800 text-indigo-700 dark:text-indigo-300 border-2 border-dashed border-indigo-300 dark:border-indigo-700 rounded-xl cursor-pointer hover:bg-indigo-50/50 dark:hover:bg-indigo-900/30 transition-colors ${parsingJd ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <label htmlFor="jd-upload" className={`w-full flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-zinc-900 text-gray-800 dark:text-gray-200 border-2 border-dashed border-gray-300 dark:border-zinc-700 rounded-xl cursor-pointer hover:bg-gray-100 dark:hover:bg-zinc-800 transition-colors text-xs font-bold shadow-xs ${parsingJd ? 'opacity-50 cursor-not-allowed' : ''}`}>
                 {parsingJd ? (
                     <>
                         <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
-                        Parsing JD...
+                        Parsing Document...
                     </>
                 ) : (
                     <>
-                        <i className="fa-solid fa-file-upload"></i>
-                        Upload Job Description
+                        <i className="fa-solid fa-file-upload text-xs text-primary"></i>
+                        Upload Job Description (PDF / TXT)
                     </>
                 )}
             </label>
             <input id="jd-upload" type="file" accept=".pdf,.txt" className="hidden" onChange={handleJDUpload} disabled={parsingJd} />
         </div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
-          <div className="space-y-2 form-field">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Job Title / Role</label>
+          <div className="space-y-1.5 form-field">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Job Title / Role</label>
             <input name="title"
               type="text" required 
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+              className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
               value={formData.title}
               onChange={handleFormChange}
               placeholder="e.g. Senior Frontend Engineer"
             />
           </div>
 
-          <div className="space-y-2 form-field">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Job Description</label>
+          <div className="space-y-1.5 form-field">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Job Description</label>
             <textarea name="description"
               required rows={5} 
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+              className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
               value={formData.description}
               onChange={handleFormChange}
-              placeholder="Describe the role, responsibilities, and what you'''re looking for..."
+              placeholder="Describe the role responsibilities, team structure, and candidate expectations..."
             />
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Company Department</label>
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Company Department</label>
               <input name="department"
                 type="text" required 
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                 value={formData.department}
                 onChange={handleFormChange}
-                placeholder="e.g. Engineering, Marketing, Sales"
+                placeholder="e.g. Engineering, Product, Design"
               />
             </div>
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Employment Type</label>
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Employment Type</label>
               <select name="employmentType"
                 required 
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                 value={formData.employmentType}
                 onChange={handleFormChange}
               >
-                <option value="">Select...</option>
+                <option value="">Select Employment Type...</option>
                 <option value="Full-time">Full-time</option>
                 <option value="Part-time">Part-time</option>
                 <option value="Contract">Contract</option>
@@ -447,47 +541,47 @@ const CreateInterview: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Required Experience (Years)</label>
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Required Experience (Years)</label>
               <div className="flex items-center gap-3">
                 <input
                   name="minExperience"
                   type="number"
                   min="0"
                   required
-                  placeholder="Min Years"
-                  className="w-1/2 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm"
+                  placeholder="Min Yrs"
+                  className="w-1/2 px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                   value={formData.minExperience}
                   onChange={handleFormChange}
                 />
-                <span className="text-gray-400 dark:text-gray-500 font-medium">to</span>
+                <span className="text-gray-400 dark:text-zinc-500 font-semibold text-xs uppercase">to</span>
                 <input
                   name="maxExperience"
                   type="number"
                   min="0"
                   required
-                  placeholder="Max Years"
-                  className="w-1/2 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm"
+                  placeholder="Max Yrs"
+                  className="w-1/2 px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition-all"
                   value={formData.maxExperience}
                   onChange={handleFormChange}
                 />
               </div>
             </div>
             
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Minimum Education Level</label>
-              <div className="flex flex-wrap gap-2 mb-2 min-h-[44px] p-2 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl">
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Education Requirement</label>
+              <div className="flex flex-wrap gap-2 mb-2 min-h-[44px] p-2 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl">
                 {formData.education ? formData.education.split(',').map(e => e.trim()).filter(e => e).map(edu => (
-                  <span key={edu} className="px-3 py-1 bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 border border-indigo-500/20 rounded-lg text-sm flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                  <span key={edu} className="px-3 py-1 bg-zinc-200 dark:bg-zinc-800 text-gray-900 dark:text-gray-100 border border-gray-300 dark:border-zinc-700 rounded-lg text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
                     {edu}
-                    <button type="button" onClick={() => toggleEducation(edu)} className="hover:text-black dark:hover:text-white transition-colors">&times;</button>
+                    <button type="button" onClick={() => toggleEducation(edu)} className="hover:text-red-500 transition-colors">&times;</button>
                   </span>
-                )) : <span className="text-gray-400 dark:text-gray-500 text-sm p-1.5 italic">No education level selected</span>}
+                )) : <span className="text-gray-400 dark:text-zinc-500 text-xs p-1.5 italic">No education level selected</span>}
               </div>
 
               <div className="flex flex-col gap-2">
                 <select
-                  className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm"
+                  className="w-full px-4 py-2.5 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-xs font-bold focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                   value=""
                   onChange={(e) => {
                     if (e.target.value) {
@@ -505,7 +599,7 @@ const CreateInterview: React.FC = () => {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 min-w-0 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all text-sm"
+                    className="flex-1 min-w-0 px-3 py-2 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                     placeholder="Or type custom education..."
                     value={eduInput}
                     onChange={e => setEduInput(e.target.value)}
@@ -527,7 +621,7 @@ const CreateInterview: React.FC = () => {
                         setEduInput('');
                       }
                     }}
-                    className="px-4 py-3 bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors font-medium text-sm shrink-0"
+                    className="px-3.5 py-2 bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-900 dark:text-white rounded-xl transition-colors font-bold text-xs shrink-0"
                   >
                     Add
                   </button>
@@ -536,21 +630,21 @@ const CreateInterview: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-2 form-field">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Required Skills</label>
-            <div className="flex flex-wrap gap-2 mb-2 min-h-[44px] p-2 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl">
+          <div className="space-y-1.5 form-field">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Required Technical Skills</label>
+            <div className="flex flex-wrap gap-2 mb-2 min-h-[44px] p-2 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl">
               {formData.skills ? formData.skills.split(',').map(s => s.trim()).filter(s => s).map(skill => (
-                <span key={skill} className="px-3 py-1 bg-primary/20 text-primary-dark dark:text-primary-light border border-primary/20 rounded-lg text-sm flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+                <span key={skill} className="px-3 py-1 bg-primary/10 text-primary-dark dark:text-primary-light border border-primary/20 rounded-lg text-xs font-bold flex items-center gap-2 animate-in fade-in duration-200">
                   {skill}
-                  <button type="button" onClick={() => toggleSkill(skill)} className="hover:text-black dark:hover:text-white transition-colors">&times;</button>
+                  <button type="button" onClick={() => toggleSkill(skill)} className="hover:text-red-500 transition-colors">&times;</button>
                 </span>
-              )) : <span className="text-gray-400 dark:text-gray-500 text-sm p-1.5 italic">No skills selected</span>}
+              )) : <span className="text-gray-400 dark:text-zinc-500 text-xs p-1.5 italic">No skills selected</span>}
             </div>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                className="flex-1 px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="flex-1 px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                 placeholder="Search or add custom skill..."
                 value={skillSearch}
                 onChange={e => setSkillSearch(e.target.value)}
@@ -572,13 +666,13 @@ const CreateInterview: React.FC = () => {
                     setSkillSearch('');
                   }
                 }}
-                className="px-6 py-3 bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors font-medium"
+                className="px-5 py-3 bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-900 dark:text-white rounded-xl transition-colors font-bold text-xs"
               >
                 Add
               </button>
             </div>
 
-            <div className="mt-2 border border-gray-200 dark:border-white/10 rounded-xl p-3 max-h-40 overflow-y-auto bg-gray-50 dark:bg-[#1a1a1a] custom-scrollbar">
+            <div className="mt-2 border border-gray-200 dark:border-zinc-800 rounded-xl p-3 max-h-40 overflow-y-auto bg-gray-50/50 dark:bg-zinc-950 custom-scrollbar">
               <div className="flex flex-wrap gap-2">
                 {SKILL_OPTIONS.filter(s => s.toLowerCase().includes(skillSearch.toLowerCase())).map(skill => {
                   const isSelected = formData.skills.split(',').map(s => s.trim()).includes(skill);
@@ -587,9 +681,9 @@ const CreateInterview: React.FC = () => {
                       key={skill}
                       type="button"
                       onClick={() => toggleSkill(skill)}
-                      className={`px-3 py-1.5 rounded-lg text-sm border transition-all ${isSelected
-                        ? 'bg-primary/20 border-primary/50 text-gray-900 dark:text-white font-medium'
-                        : 'bg-white dark:bg-white/5 border-gray-200 dark:border-white/5 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 hover:text-gray-900 dark:hover:text-white'
+                      className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${isSelected
+                        ? 'bg-primary/10 border-primary/40 text-primary-dark dark:text-primary-light'
+                        : 'bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 text-gray-600 dark:text-zinc-400 hover:bg-gray-100 dark:hover:bg-zinc-800 hover:text-gray-900 dark:hover:text-white'
                         }`}
                     >
                       {skill} {isSelected && '✓'}
@@ -600,52 +694,52 @@ const CreateInterview: React.FC = () => {
             </div>
           </div>
 
-          <div className="space-y-4 form-field p-6 bg-blue-50/50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-2xl">
+          {/* AI Questions Parameter Box */}
+          <div className="space-y-4 form-field p-5 bg-gray-50/60 dark:bg-zinc-950/60 border border-gray-200 dark:border-zinc-800/80 rounded-xl">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <label className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                  <i className="fa-solid fa-robot text-blue-500"></i>
+                <label className="text-xs font-extrabold uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-2">
+                  <i className="fa-solid fa-robot text-primary"></i>
                   Number of AI-Generated Questions
                 </label>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Specify how many questions the AI should create based on the job description.</p>
+                <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Specify how many questions the AI should create dynamically based on the job description.</p>
               </div>
               
-              <div className="flex items-center gap-3 bg-white dark:bg-[#1a1a1a] p-1.5 rounded-xl border border-gray-200 dark:border-white/10 shadow-sm self-start md:self-center">
+              <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 p-1.5 rounded-xl border border-gray-200 dark:border-zinc-800 shadow-xs self-start md:self-center">
                 <button
                   type="button"
                   disabled={formData.numQuestions <= 1}
                   onClick={() => setFormData(prev => ({ ...prev, numQuestions: Math.max(1, prev.numQuestions - 1) }))}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-blue-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-gray-100 dark:border-white/5"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-gray-200 dark:border-zinc-700"
                 >
-                  <i className="fa-solid fa-minus text-xs"></i>
+                  <i className="fa-solid fa-minus text-[10px]"></i>
                 </button>
                 <input name="numQuestions"
                   type="number" min="1" max="25" 
-                  className="w-12 text-center bg-transparent border-none text-lg font-bold text-gray-900 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  className="w-10 text-center bg-transparent border-none text-base font-extrabold text-gray-900 dark:text-white focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   value={formData.numQuestions}
                   onChange={handleFormChange}
                 />
-                
                 <button
                   type="button"
                   disabled={formData.numQuestions >= 25}
                   onClick={() => setFormData(prev => ({ ...prev, numQuestions: Math.min(25, prev.numQuestions + 1) }))}
-                  className="w-10 h-10 flex items-center justify-center rounded-lg bg-gray-50 dark:bg-white/5 text-gray-600 dark:text-gray-400 hover:bg-blue-500 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-gray-100 dark:border-white/5"
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-zinc-700 disabled:opacity-30 disabled:cursor-not-allowed transition-all border border-gray-200 dark:border-zinc-700"
                 >
-                  <i className="fa-solid fa-plus text-xs"></i>
+                  <i className="fa-solid fa-plus text-[10px]"></i>
                 </button>
               </div>
             </div>
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Difficulty Level</label>
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Difficulty Level</label>
               <select 
                 name="difficulty" 
                 value={formData.difficulty} 
                 onChange={handleFormChange} 
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
               >
                 <option value="Easy">Easy</option>
                 <option value="Medium">Medium</option>
@@ -653,26 +747,22 @@ const CreateInterview: React.FC = () => {
               </select>
             </div>
             
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                Report Check Strictness
-              </label>
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Proctoring Strictness</label>
               <select 
                 name="strictness" 
                 value={formData.strictness} 
                 onChange={handleFormChange} 
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white appearance-none focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
               >
-                <option value="Low">Low (Ignore minor issues)</option>
-                <option value="Medium">Medium (Balanced)</option>
-                <option value="Hard">Hard (Strict feedback)</option>
+                <option value="Low">Low (Standard monitoring)</option>
+                <option value="Medium">Medium (Balanced monitoring)</option>
+                <option value="Hard">Strict (Strict anti-cheat checks)</option>
               </select>
             </div>
 
-            <div className="space-y-2 form-field">
-              <label className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                Max Responses (Optional)
-              </label>
+            <div className="space-y-1.5 form-field">
+              <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Max Responses (Optional)</label>
               <input
                 type="number"
                 name="maxResponses"
@@ -680,24 +770,25 @@ const CreateInterview: React.FC = () => {
                 placeholder="Unlimited"
                 value={formData.maxResponses}
                 onChange={handleFormChange}
-                className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
               />
             </div>
           </div>
 
-          <div className="space-y-4 form-field p-6 bg-blue-50/50 dark:bg-blue-500/5 border border-blue-100 dark:border-blue-500/20 rounded-2xl">
+          {/* Manual Questions Box */}
+          <div className="space-y-4 form-field p-5 bg-gray-50/60 dark:bg-zinc-950/60 border border-gray-200 dark:border-zinc-800/80 rounded-xl">
             <div>
-              <label className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                <i className="fa-solid fa-clipboard-question text-blue-500"></i>
+              <label className="text-xs font-extrabold uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-2">
+                <i className="fa-solid fa-clipboard-question text-primary"></i>
                 Manual Interview Questions (Optional)
               </label>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Add specific questions you want the AI to ask during the interview.</p>
+              <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Add specific mandatory questions you want the AI interviewer to ask.</p>
             </div>
 
             <div className="flex gap-2">
               <input
                 type="text"
-                className="flex-1 px-4 py-3 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                className="flex-1 px-4 py-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                 placeholder="e.g. Tell us about your experience with React..."
                 value={currentManualQuestion}
                 onChange={e => setCurrentManualQuestion(e.target.value)}
@@ -711,7 +802,7 @@ const CreateInterview: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAddManualQuestion}
-                className="px-6 py-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl transition-all font-medium flex items-center gap-2 shadow-lg shadow-blue-500/20"
+                className="px-5 py-3 bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-900 dark:text-white rounded-xl transition-all font-bold text-xs flex items-center gap-1.5 shrink-0"
               >
                 <i className="fa-solid fa-plus text-xs"></i>
                 Add
@@ -721,19 +812,19 @@ const CreateInterview: React.FC = () => {
             {manualQuestions.length > 0 && (
               <div className="space-y-2 mt-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
                 {manualQuestions.map((q, index) => (
-                  <div key={index} className="flex items-start justify-between p-3.5 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl animate-in fade-in slide-in-from-left-2 duration-300">
+                  <div key={index} className="flex items-start justify-between p-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl animate-in fade-in duration-200">
                     <div className="flex gap-3">
-                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center">
+                      <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary font-bold text-xs flex items-center justify-center">
                         {index + 1}
                       </span>
-                      <p className="text-sm text-gray-700 dark:text-gray-300 mt-0.5">{q}</p>
+                      <p className="text-xs font-semibold text-gray-800 dark:text-gray-200 mt-0.5">{q}</p>
                     </div>
                     <button
                       type="button"
                       onClick={() => handleRemoveManualQuestion(index)}
                       className="text-gray-400 hover:text-red-500 transition-colors p-1"
                     >
-                      <i className="fa-solid fa-trash-can text-sm"></i>
+                      <i className="fa-solid fa-trash-can text-xs"></i>
                     </button>
                   </div>
                 ))}
@@ -741,39 +832,40 @@ const CreateInterview: React.FC = () => {
             )}
           </div>
 
-          <div className="space-y-4 form-field p-6 bg-gray-50/50 dark:bg-gray-800/20 border border-gray-100 dark:border-white/10 rounded-2xl">
+          {/* Custom Fields Box */}
+          <div className="space-y-4 form-field p-5 bg-gray-50/60 dark:bg-zinc-950/60 border border-gray-200 dark:border-zinc-800/80 rounded-xl">
               <div>
-                  <label className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                      <i className="fa-solid fa-plus-circle text-gray-500"></i>
-                      Custom Fields (Optional)
+                  <label className="text-xs font-extrabold uppercase tracking-wider text-gray-900 dark:text-white flex items-center gap-2">
+                      <i className="fa-solid fa-plus-circle text-gray-400"></i>
+                      Custom Job Fields (Optional)
                   </label>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Add any other relevant information for the job.</p>
+                  <p className="text-xs text-gray-500 dark:text-zinc-400 mt-0.5">Add additional information fields (e.g. Salary Range, Work Location).</p>
               </div>
 
               <div className="flex gap-2">
                   <input
                       type="text"
-                      className="flex-1 px-4 py-3 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm"
-                      placeholder="Field Name (e.g., Salary Range)"
+                      className="flex-1 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                      placeholder="Field Name (e.g. Location)"
                       value={tempCustomField.key}
                       onChange={e => setTempCustomField({ ...tempCustomField, key: e.target.value })}
                   />
                   <input
                       type="text"
-                      className="flex-1 px-4 py-3 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-sm"
-                      placeholder="Field Value (e.g., $80k - $120k)"
+                      className="flex-1 px-4 py-2.5 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-xs outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                      placeholder="Field Value (e.g. Remote / Hybrid)"
                       value={tempCustomField.value}
                       onChange={e => setTempCustomField({ ...tempCustomField, value: e.target.value })}
                   />
-                  <button type="button" onClick={handleAddCustomField} className="px-6 py-3 bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors font-medium text-sm">Add</button>
+                  <button type="button" onClick={handleAddCustomField} className="px-4 py-2.5 bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-900 dark:text-white rounded-xl transition-colors font-bold text-xs shrink-0">Add</button>
               </div>
 
               {customFields.length > 0 && (
                   <div className="space-y-2 mt-4 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
                       {customFields.map((field) => (
-                          <div key={field.id} className="flex items-center justify-between p-3 bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded-xl animate-in fade-in">
-                              <div className="flex gap-2 text-sm">
-                                  <strong className="text-gray-800 dark:text-gray-200">{field.key}:</strong>
+                          <div key={field.id} className="flex items-center justify-between p-3 bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800 rounded-xl animate-in fade-in">
+                              <div className="flex gap-2 text-xs">
+                                  <strong className="text-gray-900 dark:text-white">{field.key}:</strong>
                                   <span className="text-gray-600 dark:text-gray-400">{field.value}</span>
                               </div>
                               <button type="button" onClick={() => handleRemoveCustomField(field.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1">
@@ -785,47 +877,114 @@ const CreateInterview: React.FC = () => {
               )}
           </div>
 
-          <div className="space-y-2 form-field">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Application Deadline</label>
+          <div className="space-y-1.5 form-field">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Application Deadline</label>
             <input name="deadline"
               type="date" 
-              className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all dark:[color-scheme:dark]"
+              className="w-full px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all dark:[color-scheme:dark]"
               value={formData.deadline}
               onChange={handleFormChange}
             />
           </div>
           
-          <div className="space-y-2 form-field">
-            <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Candidate Emails</label>
-            <div className="flex items-center gap-2">
+          <div className="space-y-3 form-field">
+            <label className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">Invite Candidates (Emails & Resumes)</label>
+            <div className="flex flex-col sm:flex-row items-center gap-2">
                 <input
                     type="email"
                     value={currentEmail}
                     onChange={(e) => setCurrentEmail(e.target.value)}
-                    placeholder="Enter candidate email and press Enter or click Add"
-                    className="w-full px-4 py-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-white/10 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 transition-all"
+                    placeholder="Candidate Email"
+                    className="w-full sm:flex-1 px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-primary/40 transition-all"
                 />
-                <button type="button" onClick={handleAddEmail} className="px-6 py-3 bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors font-medium">Add</button>
+                <input
+                    type="tel"
+                    value={currentPhone}
+                    onChange={(e) => setCurrentPhone(e.target.value)}
+                    placeholder="Phone Number (Optional)"
+                    className="w-full sm:flex-1 px-4 py-3 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-zinc-500 text-sm outline-none focus:ring-2 focus:ring-primary/40 transition-all"
+                />
+                <button type="button" onClick={handleAddEmail} className="w-full sm:w-auto px-5 py-3 bg-gray-200 dark:bg-zinc-800 hover:bg-gray-300 dark:hover:bg-zinc-700 text-gray-900 dark:text-white rounded-xl transition-colors font-bold text-xs shrink-0">Add Candidate</button>
             </div>
-             <div className="flex flex-wrap gap-2 mt-2">
-                {candidateEmails.map(email => (
-                    <div key={email} className="flex items-center gap-2 bg-gray-200 dark:bg-gray-700 rounded-full px-3 py-1 text-sm">
-                        {email}
-                        <button type="button" onClick={() => handleRemoveEmail(email)} className="text-red-500 hover:text-red-700">
-                            &times;
-                        </button>
-                    </div>
-                ))}
-            </div>
+            
+            {candidateEmails.length > 0 && (
+                <div className="flex flex-col gap-2 mt-3 max-h-[220px] overflow-y-auto pr-1">
+                    {candidateEmails.map(email => {
+                        const isEditing = editingCandidateEmailKey === email;
+                        const phone = candidatePhones[email.toLowerCase()] || '';
+
+                        return (
+                            <div key={email} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 bg-gray-50/80 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl p-3 text-xs">
+                                {isEditing ? (
+                                    <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                                        <input 
+                                            type="email" 
+                                            value={editedEmailInput} 
+                                            onChange={(e) => setEditedEmailInput(e.target.value)} 
+                                            placeholder="Candidate Email"
+                                            className="flex-1 p-2 text-xs border rounded-lg bg-white dark:bg-zinc-900 border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white"
+                                            autoFocus
+                                        />
+                                        <input 
+                                            type="tel" 
+                                            value={editedPhoneInput} 
+                                            onChange={(e) => setEditedPhoneInput(e.target.value)} 
+                                            placeholder="Phone Number (e.g. 9876543210)"
+                                            className="flex-1 p-2 text-xs border rounded-lg bg-white dark:bg-zinc-900 border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white"
+                                        />
+                                        <div className="flex gap-1.5 shrink-0 self-end sm:self-center">
+                                            <button type="button" onClick={() => handleSaveCandidateEdit(email)} className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg font-bold">Save</button>
+                                            <button type="button" onClick={() => setEditingCandidateEmailKey(null)} className="bg-gray-200 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-2.5 py-1.5 rounded-lg font-bold">Cancel</button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-gray-900 dark:text-white">{email}</span>
+                                            {phone ? (
+                                                <span className="text-xs text-blue-600 dark:text-blue-400 font-mono font-bold flex items-center gap-1.5 mt-0.5"><i className="fas fa-phone-alt text-[10px]"></i>{phone}</span>
+                                            ) : (
+                                                <span className="text-[11px] text-gray-400 dark:text-zinc-500 italic mt-0.5">No contact phone added</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center gap-1 shrink-0 self-end sm:self-center">
+                                            <button 
+                                                type="button" 
+                                                onClick={() => {
+                                                    setEditingCandidateEmailKey(email);
+                                                    setEditedEmailInput(email);
+                                                    setEditedPhoneInput(phone);
+                                                }}
+                                                className="p-1.5 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors"
+                                                title="Edit candidate email & contact phone number before sending invite"
+                                            >
+                                                <i className="fas fa-pencil-alt text-xs"></i>
+                                            </button>
+                                            <button 
+                                                type="button" 
+                                                onClick={() => handleRemoveEmail(email)} 
+                                                className="p-1.5 text-red-500 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
+                                                title="Remove Candidate"
+                                            >
+                                                <i className="fas fa-trash-alt text-xs"></i>
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
 
             <div className="relative flex py-2 items-center form-field">
-                <div className="flex-grow border-t border-gray-200 dark:border-white/10"></div>
-                <span className="flex-shrink mx-4 text-gray-400 dark:text-gray-500 text-xs">OR</span>
-                <div className="flex-grow border-t border-gray-200 dark:border-white/10"></div>
+                <div className="flex-grow border-t border-gray-200 dark:border-zinc-800"></div>
+                <span className="flex-shrink mx-4 text-gray-400 dark:text-zinc-500 text-xs font-bold uppercase">OR</span>
+                <div className="flex-grow border-t border-gray-200 dark:border-zinc-800"></div>
             </div>
 
             <div className="form-field">
-                <label htmlFor="resume-upload" className={`w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-100 dark:bg-white/5 text-gray-900 dark:text-white border border-gray-200 dark:border-white/10 rounded-xl hover:bg-gray-200 dark:hover:bg-white/10 transition-colors font-medium cursor-pointer ${parsingResumes ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                <label htmlFor="resume-upload" className={`w-full flex items-center justify-center gap-2 px-6 py-3 bg-white dark:bg-zinc-900 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-zinc-800 rounded-xl hover:bg-gray-50 dark:hover:bg-zinc-800/60 transition-colors font-bold text-xs cursor-pointer ${parsingResumes ? 'opacity-50 cursor-not-allowed' : ''}`}>
                     {parsingResumes ? (
                         <>
                             <i className="fa-solid fa-circle-notch fa-spin text-xs"></i>
@@ -833,13 +992,13 @@ const CreateInterview: React.FC = () => {
                         </>
                     ) : (
                         <>
-                            <i className="fa-solid fa-file-upload"></i>
-                            Upload Resumes to Find Emails
+                            <i className="fa-solid fa-file-upload text-xs text-primary"></i>
+                            Upload Resumes to Auto-Extract Candidates
                         </>
                     )}
                 </label>
                 <input id="resume-upload" type="file" multiple accept=".pdf,.txt" className="hidden" onChange={handleResumeUpload} disabled={parsingResumes} />
-                <p className="text-xs text-center text-gray-400 dark:text-gray-500 mt-2">Upload one or more PDF/TXT resumes to automatically extract emails.</p>
+                <p className="text-xs text-center text-gray-500 dark:text-zinc-400 mt-2">Upload PDF/TXT candidate resumes to extract emails and phone numbers.</p>
             </div>
 
           </div>
@@ -848,22 +1007,22 @@ const CreateInterview: React.FC = () => {
             <button
               type="submit"
               disabled={loading || sendingEmails}
-              className="w-full bg-primary hover:bg-primary-dark text-white dark:text-black font-bold py-4 px-4 rounded-xl shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3"
+              className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-extrabold py-4 px-6 rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.99] border border-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-3 text-sm"
             >
               {loading || sendingEmails ? (
                 <>
                   <i className="fa-solid fa-circle-notch fa-spin"></i>
-                  {loading ? 'Saving Interview...' : `Sending Invitations...`}
+                  {loading ? 'Saving Interview...' : `Dispatching Invitations...`}
                 </>
               ) : (
                 <>
-                  <i className="fa-solid fa-paper-plane text-sm"></i>
+                  <i className="fa-solid fa-paper-plane text-xs"></i>
                   Create Interview & Send Invitations
                 </>
               )}
             </button>
-            <p className="text-center text-xs text-gray-500 dark:text-gray-400 mt-3 italic">
-              This will generate access codes and notify listed candidates automatically.
+            <p className="text-center text-xs text-gray-500 dark:text-zinc-400 mt-3 italic">
+              Generates access codes and dispatches Email & WhatsApp invitations automatically.
             </p>
           </div>
         </form>

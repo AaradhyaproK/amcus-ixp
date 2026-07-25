@@ -8,6 +8,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import { useMessageBox } from '../components/MessageBox';
 import { Interview, InterviewSubmission } from '../types';
 import { sendInterviewInvitations } from '../services/brevoService';
+import { sendWhatsAppMessage, sendBulkWhatsAppInvitations, extractPhoneFromText } from '../services/wasenderService';
 import { evaluateResumeForMultipleJobs } from '../services/api';
 
 // Setup PDF.js worker
@@ -180,11 +181,10 @@ const InvitedCandidates: React.FC = () => {
                 }
 
                 const emailMatch = text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/i);
-                const phoneMatch = text.match(/(?:\+?\d{1,4}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)?\d{3}[\s.-]?\d{4}/);
+                const phone = extractPhoneFromText(text);
 
                 if (emailMatch) {
                     const email = emailMatch[1].toLowerCase();
-                    const phone = phoneMatch ? phoneMatch[0] : 'N/A';
                     if (!parsed.some(c => c.email === email) && !newCandidates.some(c => c.email === email)) {
                         let scores = {};
                         if (text.length > 50 && jobsPayload.length > 0) {
@@ -257,8 +257,21 @@ const InvitedCandidates: React.FC = () => {
                 selectedInterview.accessCode
             );
 
+            // Send WhatsApp notifications via WasenderAPI for candidates with phone numbers
+            const candidatesWithPhones = newCandidates.filter(c => c.phone && c.phone.trim() !== '' && c.phone !== 'N/A');
+            let waSentCount = 0;
+            if (candidatesWithPhones.length > 0) {
+                const waResult = await sendBulkWhatsAppInvitations(
+                    candidatesWithPhones.map(c => ({ phone: c.phone, email: c.email })),
+                    selectedInterview.title,
+                    selectedInterview.interviewLink || '',
+                    selectedInterview.accessCode
+                );
+                waSentCount = waResult.successCount;
+            }
+
             if (result.success) {
-                messageBox.showSuccess(`Successfully added and invited ${result.totalEmails} candidates!`);
+                messageBox.showSuccess(`Successfully added & invited ${result.totalEmails} candidate(s)${waSentCount > 0 ? ` (${waSentCount} via WhatsApp)` : ''}!`);
                 // Optimistically update the UI table
                 const optimizedAdditions: GlobalCandidate[] = newCandidates.map(c => ({
                     email: c.email,
@@ -709,17 +722,14 @@ const InvitedCandidates: React.FC = () => {
                                         console.error("Error updating phone in Firestore:", err);
                                     }
                                     
-                                    // Open WhatsApp web
-                                    const cleanedPhone = whatsappModal.phone.replace(/[^0-9]/g, '');
-                                    let targetPhone = cleanedPhone;
-                                    if (cleanedPhone.length === 10) {
-                                        targetPhone = '91' + cleanedPhone;
-                                    }
-                                    
-                                    const waUrl = `https://web.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(whatsappModal.message)}`;
-                                    window.open(waUrl, '_blank');
+                                    // Send WhatsApp message directly via WasenderAPI
+                                    const waResult = await sendWhatsAppMessage(whatsappModal.phone, whatsappModal.message);
                                     setWhatsappModal(null);
-                                    messageBox.showSuccess("Redirecting to WhatsApp Web...");
+                                    if (waResult.success) {
+                                        messageBox.showSuccess("WhatsApp invite sent successfully via WasenderAPI!");
+                                    } else {
+                                        messageBox.showError(`Failed to send WhatsApp invite: ${waResult.error || 'Unknown error'}`);
+                                    }
                                 }}
                                 className="px-5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
                             >

@@ -9,6 +9,7 @@ import * as mammoth from 'mammoth';
 import { useMessageBox } from '../components/MessageBox';
 import { createPortal } from 'react-dom';
 import { sendInterviewInvitations } from '../services/brevoService';
+import { sendWhatsAppMessage, sendBulkWhatsAppInvitations, sendWhatsAppInterviewInvite, extractPhoneFromText } from '../services/wasenderService';
 import EditJobModal from './EditJob';
 
 import { evaluateResumeMatch, uploadToCloudinary } from '../services/api';
@@ -33,6 +34,10 @@ const RecruiterInterviews: React.FC = () => {
   const [sendingEmails, setSendingEmails] = useState(false);
   const [editingCandidateEmail, setEditingCandidateEmail] = useState<string | null>(null);
   const [editedEmailValue, setEditedEmailValue] = useState('');
+  const [editedPhoneValue, setEditedPhoneValue] = useState('');
+  const [editingNewCandidateEmail, setEditingNewCandidateEmail] = useState<string | null>(null);
+  const [editedNewEmailVal, setEditedNewEmailVal] = useState('');
+  const [editedNewPhoneVal, setEditedNewPhoneVal] = useState('');
   const [resendingEmail, setResendingEmail] = useState<string | null>(null);
   const [remindingInterviewId, setRemindingInterviewId] = useState<string | null>(null);
   const [whatsappModal, setWhatsappModal] = useState<{
@@ -224,11 +229,10 @@ const RecruiterInterviews: React.FC = () => {
         }
 
         const emailMatch = text.match(/([a-zA-Z0-9._-]+@[a-zA-Z0-9._-]+\.[a-zA-Z0-9._-]+)/i);
-        const phoneMatch = text.match(/(?:\+?\d{1,4}[\s.-]?)?(?:\(?\d{3}\)?[\s.-]?)?\d{3}[\s.-]?\d{4}/);
+        const phone = extractPhoneFromText(text);
 
         if (emailMatch) {
             const lowerEmail = emailMatch[1].toLowerCase();
-            const phone = phoneMatch ? phoneMatch[0] : 'N/A';
             
             // Check duplicate email BEFORE uploading and parsing
             const qExist = query(
@@ -361,41 +365,140 @@ Output format (MUST be valid JSON):
     e.target.value = ''; // Reset file input
   };
 
-  const handleEditAndResend = async (oldEmail: string, newEmail: string) => {
-    if (!selectedInterview || !newEmail || oldEmail === newEmail) {
-        setEditingCandidateEmail(null);
-        return;
+  const handleSaveNewCandidateEdit = (oldEmail: string) => {
+    const trimmedEmail = editedNewEmailVal.trim().toLowerCase();
+    const trimmedPhone = editedNewPhoneVal.trim();
+
+    if (!trimmedEmail) {
+      messageBox.showError("Candidate email cannot be empty.");
+      return;
     }
-    
+
+    setNewEmails(prev => prev.map(e => e.toLowerCase() === oldEmail.toLowerCase() ? trimmedEmail : e));
+    setParsedCandidates(prev => {
+      const existing = prev.find(c => c.email.toLowerCase() === oldEmail.toLowerCase());
+      const score = existing?.matchScore || 'N/A';
+      const filtered = prev.filter(c => c.email.toLowerCase() !== oldEmail.toLowerCase());
+      return [...filtered, { email: trimmedEmail, phone: trimmedPhone || 'N/A', matchScore: score }];
+    });
+
+    setEditingNewCandidateEmail(null);
+    messageBox.showSuccess("Updated candidate email & contact phone number before sending invite!");
+  };
+
+  const handleEditAndSaveCandidateInvite = async (oldEmail: string, newEmail: string, newPhone: string, shouldResend: boolean = false) => {
+    if (!selectedInterview) return;
+    const trimmedNewEmail = newEmail.trim().toLowerCase();
+    const trimmedNewPhone = newPhone.trim();
+
+    if (!trimmedNewEmail) {
+      messageBox.showError('Candidate email cannot be empty.');
+      return;
+    }
+
     setResendingEmail(oldEmail);
     try {
-        const updatedEmails = (selectedInterview.candidateEmails || []).filter(e => e.toLowerCase() !== oldEmail.toLowerCase());
-        updatedEmails.push(newEmail.toLowerCase());
+      const existingEmails = selectedInterview.candidateEmails || [];
+      const updatedEmails = existingEmails.map(e => e.toLowerCase() === oldEmail.toLowerCase() ? trimmedNewEmail : e);
 
-        await updateDoc(doc(db, 'interviews', selectedInterview.id), { 
-            candidateEmails: updatedEmails
-        });
-        
-        setSelectedInterview({...selectedInterview, candidateEmails: updatedEmails});
-        
+      const existingCandData = (selectedInterview as any).candidateData || [];
+      let updatedCandData: any[] = [];
+      let found = false;
+
+      for (const c of existingCandData) {
+        if (c.email && c.email.toLowerCase() === oldEmail.toLowerCase()) {
+          updatedCandData.push({ ...c, email: trimmedNewEmail, phone: trimmedNewPhone || 'N/A' });
+          found = true;
+        } else {
+          updatedCandData.push(c);
+        }
+      }
+
+      if (!found) {
+        updatedCandData.push({ email: trimmedNewEmail, phone: trimmedNewPhone || 'N/A' });
+      }
+
+      await updateDoc(doc(db, 'interviews', selectedInterview.id), { 
+        candidateEmails: updatedEmails,
+        candidateData: updatedCandData
+      });
+
+      const updatedInterview = {
+        ...selectedInterview,
+        candidateEmails: updatedEmails,
+        candidateData: updatedCandData
+      };
+
+      setSelectedInterview(updatedInterview);
+      setInterviews(prev => prev.map(i => i.id === updatedInterview.id ? updatedInterview : i));
+
+      if (shouldResend) {
         const result = await sendInterviewInvitations(
-            [newEmail],
-            selectedInterview.title,
-            selectedInterview.interviewLink || '',
-            selectedInterview.accessCode
+          [trimmedNewEmail],
+          selectedInterview.title,
+          selectedInterview.interviewLink || '',
+          selectedInterview.accessCode
         );
 
-        if (result.success) {
-            messageBox.showSuccess(`Email updated and invitation resent to ${newEmail}!`);
-        } else {
-            messageBox.showError(`Failed to resend email: ${result.error}`);
+        let waMsg = '';
+        if (trimmedNewPhone && trimmedNewPhone !== 'N/A') {
+          const waResult = await sendWhatsAppInterviewInvite({
+            phone: trimmedNewPhone,
+            candidateName: trimmedNewEmail.split('@')[0],
+            jobTitle: selectedInterview.title,
+            interviewLink: selectedInterview.interviewLink || `${window.location.origin}/#/interview/${selectedInterview.id}`,
+            accessCode: selectedInterview.accessCode
+          });
+          if (waResult.success) waMsg = ' & WhatsApp invite sent';
         }
+
+        if (result.success) {
+          messageBox.showSuccess(`Updated details & resent invitation to ${trimmedNewEmail}${waMsg}!`);
+        } else {
+          messageBox.showError(`Updated details, but email resend failed: ${result.error}`);
+        }
+      } else {
+        messageBox.showSuccess(`Successfully updated candidate details for ${trimmedNewEmail}!`);
+      }
     } catch (error: any) {
-        console.error('Edit & Resend error:', error);
-        messageBox.showError('Failed to update and resend invitation.');
+      console.error('Edit & Save candidate invite error:', error);
+      messageBox.showError('Failed to update candidate invitation.');
     } finally {
-        setResendingEmail(null);
-        setEditingCandidateEmail(null);
+      setResendingEmail(null);
+      setEditingCandidateEmail(null);
+    }
+  };
+
+  const handleDeleteCandidateInvite = async (emailToDelete: string) => {
+    if (!selectedInterview) return;
+
+    const confirmDelete = window.confirm(
+      `Are you sure you want to remove candidate "${emailToDelete}" from this interview's invitation list?`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const updatedEmails = (selectedInterview.candidateEmails || []).filter(e => e.toLowerCase() !== emailToDelete.toLowerCase());
+      const existingCandData = (selectedInterview as any).candidateData || [];
+      const updatedCandData = existingCandData.filter((c: any) => c.email && c.email.toLowerCase() !== emailToDelete.toLowerCase());
+
+      await updateDoc(doc(db, 'interviews', selectedInterview.id), { 
+        candidateEmails: updatedEmails,
+        candidateData: updatedCandData
+      });
+
+      const updatedInterview = {
+        ...selectedInterview,
+        candidateEmails: updatedEmails,
+        candidateData: updatedCandData
+      };
+
+      setSelectedInterview(updatedInterview);
+      setInterviews(prev => prev.map(i => i.id === updatedInterview.id ? updatedInterview : i));
+      messageBox.showSuccess(`Candidate "${emailToDelete}" removed from invitation list.`);
+    } catch (err: any) {
+      console.error('Delete candidate invite error:', err);
+      messageBox.showError('Failed to remove candidate invitation.');
     }
   };
 
@@ -497,8 +600,21 @@ Output format (MUST be valid JSON):
             selectedInterview.accessCode
         );
 
+        // Send WhatsApp invitations via WasenderAPI for candidates with valid phone numbers
+        const candidatesWithPhones = candidateDataToAdd.filter(c => c.phone && c.phone.trim() !== '' && c.phone !== 'N/A');
+        let waCount = 0;
+        if (candidatesWithPhones.length > 0) {
+            const waRes = await sendBulkWhatsAppInvitations(
+                candidatesWithPhones.map(c => ({ phone: c.phone, email: c.email })),
+                selectedInterview.title,
+                selectedInterview.interviewLink || '',
+                selectedInterview.accessCode
+            );
+            waCount = waRes.successCount;
+        }
+
         if (result.success) {
-            messageBox.showSuccess(`Successfully sent ${result.totalEmails} invitation(s)!`);
+            messageBox.showSuccess(`Successfully sent ${result.totalEmails} email(s)${waCount > 0 ? ` & ${waCount} WhatsApp invite(s)` : ''}!`);
             setIsInviteModalOpen(false);
             setSelectedInterview(null);
             setNewEmails([]);
@@ -564,23 +680,31 @@ Output format (MUST be valid JSON):
 
   return (
     <div className="max-w-[1600px] mx-auto space-y-8 p-4 md:p-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-2 border-b border-gray-200 dark:border-white/5">
+      {/* Header with Stats Summary */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 pb-4 border-b border-gray-200 dark:border-zinc-800">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">My Interviews</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">Manage all your scheduled interviews.</p>
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold text-gray-900 dark:text-white tracking-tight">My Interviews</h1>
+            <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-xs font-extrabold border border-primary/20 shadow-xs">
+              {filteredInterviews.length} Active Routes
+            </span>
+          </div>
+          <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Manage, monitor, and invite candidates for all your active technical hiring routes.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <Link to="/recruiter/invites" className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-gray-700 font-semibold rounded-full shadow-sm transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm">
-            <i className="fas fa-address-book text-blue-500" title="Manage recruited candidates status roster"></i> <span>Candidate Hub</span>
+          <Link to="/recruiter/invites" className="flex items-center gap-2 px-5 py-2.5 bg-white dark:bg-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-700 text-gray-800 dark:text-gray-200 border border-gray-200 dark:border-zinc-700 font-bold rounded-xl shadow-xs transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-xs">
+            <i className="fas fa-address-book text-blue-500" title="Manage candidate roster"></i> 
+            <span>Candidate Hub</span>
           </Link>
-          <Link to="/recruiter/interview/create" className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary-dark text-white dark:text-black font-semibold rounded-full shadow-lg shadow-primary/20 transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-sm">
-            <i className="fas fa-plus" title="Create a new interview route link"></i> <span>Create New Interview</span>
+          <Link to="/recruiter/interview/create" className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 dark:bg-blue-600 dark:hover:bg-blue-500 text-white font-bold rounded-xl shadow-sm hover:shadow-md transition-all active:scale-[0.98] border border-blue-500/30 text-xs">
+            <i className="fas fa-plus" title="Create a new interview route link"></i> 
+            <span>Create New Interview</span>
           </Link>
         </div>
       </div>
 
       {/* Search & Filter Controls */}
-      <div className="bg-white dark:bg-[#111] p-4 rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+      <div className="bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl p-4 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
           {/* Search bar */}
           <div className="relative w-full md:max-w-xs">
               <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 dark:text-gray-500 pointer-events-none">
@@ -591,9 +715,17 @@ Output format (MUST be valid JSON):
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search interviews or JDs..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-zinc-800 rounded-xl bg-gray-50 dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all"
+                  className="w-full pl-9 pr-8 py-2 border border-gray-200 dark:border-zinc-800 rounded-xl bg-gray-50 dark:bg-zinc-950 text-gray-900 dark:text-gray-100 text-xs font-semibold outline-none focus:ring-2 focus:ring-primary focus:border-transparent transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                   title="Type keywords to filter interviews by title, department, or JD description"
               />
+              {searchQuery && (
+                <button 
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                >
+                  <i className="fas fa-times text-xs"></i>
+                </button>
+              )}
           </div>
 
           {/* Filters row */}
@@ -604,7 +736,7 @@ Output format (MUST be valid JSON):
                   <select
                       value={selectedDept}
                       onChange={(e) => setSelectedDept(e.target.value)}
-                      className="px-2.5 py-1.5 border border-gray-200 dark:border-zinc-800 rounded-xl bg-gray-50 dark:bg-[#1a1a1a] text-gray-700 dark:text-gray-200 text-xs font-semibold outline-none focus:ring-1 focus:ring-primary"
+                      className="px-3 py-1.5 border border-gray-200 dark:border-zinc-800 rounded-xl bg-gray-50 dark:bg-zinc-950 text-gray-800 dark:text-gray-200 text-xs font-bold outline-none focus:ring-2 focus:ring-primary"
                       title="Filter interviews by specific department"
                   >
                       {departments.map(dept => (
@@ -614,20 +746,20 @@ Output format (MUST be valid JSON):
               </div>
 
               {/* Date Mode Toggle & Inputs */}
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-zinc-800 rounded-xl px-2.5 py-1 flex-wrap">
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-zinc-950 border border-gray-200 dark:border-zinc-800 rounded-xl px-2.5 py-1 flex-wrap">
                   {/* Mode Selector Toggle */}
-                  <div className="flex bg-gray-200 dark:bg-zinc-800 rounded-lg p-0.5 mr-1 shrink-0">
+                  <div className="flex bg-gray-200/80 dark:bg-zinc-800 rounded-lg p-0.5 mr-1 shrink-0">
                       <button
                           type="button"
                           onClick={() => setDateMode('range')}
-                          className={`px-2 py-0.5 text-[9px] font-bold rounded-md transition-all ${dateMode === 'range' ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                          className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${dateMode === 'range' ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                       >
                           Range
                       </button>
                       <button
                           type="button"
                           onClick={() => setDateMode('specific')}
-                          className={`px-2 py-0.5 text-[9px] font-bold rounded-md transition-all ${dateMode === 'specific' ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-sm' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
+                          className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition-all ${dateMode === 'specific' ? 'bg-white dark:bg-zinc-700 text-gray-900 dark:text-white shadow-xs' : 'text-gray-500 hover:text-gray-700 dark:text-gray-400'}`}
                       >
                           Specific
                       </button>
@@ -640,7 +772,7 @@ Output format (MUST be valid JSON):
                               type="date"
                               value={specificDate}
                               onChange={(e) => setSpecificDate(e.target.value)}
-                              className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
+                              className="bg-transparent text-gray-800 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
                               title="Select a specific date to filter"
                           />
                       </div>
@@ -651,7 +783,7 @@ Output format (MUST be valid JSON):
                               type="date"
                               value={startDate}
                               onChange={(e) => setStartDate(e.target.value)}
-                              className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
+                              className="bg-transparent text-gray-800 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
                               title="Select start date to filter"
                           />
                           <span className="text-gray-400 text-xs font-semibold">to</span>
@@ -659,7 +791,7 @@ Output format (MUST be valid JSON):
                               type="date"
                               value={endDate}
                               onChange={(e) => setEndDate(e.target.value)}
-                              className="bg-transparent text-gray-700 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
+                              className="bg-transparent text-gray-800 dark:text-gray-200 text-xs font-semibold focus:outline-none dark:[color-scheme:dark]"
                               title="Select end date to filter"
                           />
                       </div>
@@ -676,10 +808,10 @@ Output format (MUST be valid JSON):
                           setEndDate('');
                           setSpecificDate('');
                       }}
-                      className="px-2.5 py-1.5 text-xs text-red-500 hover:text-red-600 font-bold transition-colors flex items-center gap-1"
+                      className="px-3 py-1.5 text-xs text-red-500 hover:text-red-600 dark:text-red-400 font-bold transition-colors flex items-center gap-1 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/30 rounded-xl"
                       title="Reset all search queries and active filters to default state"
                   >
-                      <i className="fas fa-undo-alt"></i> Clear
+                      <i className="fas fa-undo-alt text-[10px]"></i> Clear
                   </button>
               )}
           </div>
@@ -703,21 +835,23 @@ Output format (MUST be valid JSON):
       `}</style>
 
       {interviews.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 border-dashed">
-            <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-500">
+        <div className="text-center py-16 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 border-dashed">
+            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4 text-primary">
                 <i className="fas fa-video text-2xl"></i>
             </div>
-            <p className="text-gray-500 dark:text-gray-400 mb-6">You haven't created any interviews yet.</p>
-            <Link to="/recruiter/interview/create" className="text-primary font-medium hover:underline hover:text-primary-light transition-colors">Create your first interview</Link>
+            <p className="text-gray-600 dark:text-gray-400 font-semibold mb-6">You haven't created any interviews yet.</p>
+            <Link to="/recruiter/interview/create" className="px-6 py-2.5 bg-primary hover:bg-primary-dark text-white font-bold rounded-xl shadow-md transition-all inline-flex items-center gap-2 text-xs">
+              <i className="fas fa-plus"></i> Create your first interview
+            </Link>
         </div>
       ) : (
         <>
           {filteredInterviews.length === 0 ? (
-            <div className="text-center py-16 bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm">
-                <div className="w-12 h-12 bg-gray-100 dark:bg-gray-800/50 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400">
+            <div className="text-center py-16 bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800 shadow-sm">
+                <div className="w-12 h-12 bg-gray-100 dark:bg-zinc-800 rounded-full flex items-center justify-center mx-auto mb-3 text-gray-400">
                     <i className="fas fa-search text-base"></i>
                 </div>
-                <p className="text-gray-500 dark:text-gray-400 text-sm font-semibold">No interviews match your filters.</p>
+                <p className="text-gray-600 dark:text-gray-400 text-sm font-semibold">No interviews match your filters.</p>
                 <button
                     onClick={() => {
                         setSearchQuery('');
@@ -735,7 +869,7 @@ Output format (MUST be valid JSON):
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredInterviews.map(interview => (
-                <div key={interview.id} className="bg-white dark:bg-[#111] rounded-2xl border border-gray-200 dark:border-white/5 shadow-sm hover:shadow-md hover:border-gray-300 dark:hover:border-white/10 p-5 flex flex-col h-[510px] justify-between transition-all duration-300 transform hover:-translate-y-1">
+                <div key={interview.id} className="bg-white dark:bg-zinc-900 rounded-2xl border border-gray-200 dark:border-zinc-800/80 shadow-sm hover:shadow-xl hover:border-gray-300 dark:hover:border-zinc-700 p-5 flex flex-col h-[540px] justify-between transition-all duration-300 transform hover:-translate-y-1">
                     
                     {/* Upper Half: Header & Job Description */}
                     <div>
@@ -746,187 +880,161 @@ Output format (MUST be valid JSON):
                             </h3>
                         </div>
 
-                        {/* Subheader Row: Department & Utility Actions */}
+                        {/* Subheader Row: Department Tag & Action Icon Toolbar */}
                         <div className="flex justify-between items-center gap-4 mb-3">
-                            <p className="text-xs text-gray-400 dark:text-gray-500 font-semibold">
-                                {interview.department || "No Department"}
-                            </p>
+                            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 bg-gray-100 dark:bg-zinc-800 text-gray-700 dark:text-gray-300 rounded-md text-[11px] font-bold border border-gray-200 dark:border-zinc-700">
+                                <i className="fas fa-building text-primary/70"></i>
+                                {interview.department || "General"}
+                            </span>
                             
-                            {/* Utility Row of Management Actions */}
-                            <div className="flex items-center gap-1.5 shrink-0">
-                                {/* Open Link Tooltip */}
+                            {/* Action Icon Toolbar */}
+                            <div className="flex items-center gap-1 shrink-0 bg-gray-50 dark:bg-zinc-950 p-1 rounded-xl border border-gray-200 dark:border-zinc-800">
+                                {/* Open Link */}
                                 <div className="relative group">
                                     <Link 
                                         to={`/interview/${interview.id}`} 
                                         target="_blank" 
-                                        className="p-1.5 hover:bg-gray-100 dark:hover:bg-zinc-800 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 rounded-full transition-all border border-transparent flex items-center justify-center"
-                                        title="Open Candidate Interview Portal (opens in a new tab)"
+                                        className="w-7 h-7 hover:bg-white dark:hover:bg-zinc-800 text-gray-600 hover:text-primary dark:text-gray-300 dark:hover:text-primary rounded-lg transition-all flex items-center justify-center shadow-xs"
+                                        title="Open Candidate Interview Portal"
+                                        aria-label="Open Candidate Interview Portal"
                                     >
                                         <i className="fas fa-external-link-alt text-xs"></i>
                                     </Link>
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2.5 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[10px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-zinc-700">
                                         Open Link
                                     </div>
                                 </div>
 
-                                {/* Send Reminders Tooltip */}
+                                {/* Send Reminders */}
                                 <div className="relative group">
                                     <button 
                                         type="button"
                                         onClick={() => handleSendBulkReminders(interview)} 
                                         disabled={remindingInterviewId === interview.id}
-                                        className="p-1.5 hover:bg-purple-50 dark:hover:bg-purple-950/20 text-purple-600 hover:text-purple-700 dark:text-purple-400 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        className="w-7 h-7 hover:bg-purple-50 dark:hover:bg-purple-950/40 text-purple-600 hover:text-purple-700 dark:text-purple-400 rounded-lg transition-all flex items-center justify-center"
                                         title="Send reminder emails to all pending candidates"
+                                        aria-label="Send reminder emails"
                                     >
                                         {remindingInterviewId === interview.id ? <i className="fas fa-spinner fa-spin text-xs"></i> : <i className="fas fa-bell text-xs"></i>}
                                     </button>
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2.5 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[10px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-zinc-700">
                                         Send Reminders
                                     </div>
                                 </div>
 
-                                {/* Edit Detail Tooltip */}
+                                {/* Edit Detail */}
                                 <div className="relative group">
                                     <button 
                                         type="button"
                                         onClick={() => setEditingJobId(interview.id)} 
-                                        className="p-1.5 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-500 hover:text-amber-600 dark:hover:text-amber-400 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        className="w-7 h-7 hover:bg-amber-50 dark:hover:bg-amber-950/40 text-amber-600 hover:text-amber-700 dark:text-amber-400 rounded-lg transition-all flex items-center justify-center"
                                         title="Edit interview details and parameters"
+                                        aria-label="Edit interview details"
                                     >
                                         <i className="fas fa-pencil-alt text-xs"></i>
                                     </button>
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2.5 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[10px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-zinc-700">
                                         Edit Details
                                     </div>
                                 </div>
 
-                                {/* Delete Route Tooltip */}
+                                {/* Delete Route */}
                                 <div className="relative group">
                                     <button 
                                         type="button"
                                         onClick={() => handleDelete(interview.id)} 
-                                        className="p-1.5 hover:bg-red-50 dark:hover:bg-red-950/20 text-red-500 hover:text-red-600 dark:hover:text-red-400 rounded-full transition-all border border-transparent flex items-center justify-center"
+                                        className="w-7 h-7 hover:bg-red-50 dark:hover:bg-red-950/40 text-red-600 hover:text-red-700 dark:text-red-400 rounded-lg transition-all flex items-center justify-center"
                                         title="Delete this interview permanently"
+                                        aria-label="Delete this interview permanently"
                                     >
                                         <i className="fas fa-trash text-xs"></i>
                                     </button>
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
+                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2.5 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[10px] font-bold rounded-lg shadow-xl opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 border border-zinc-700">
                                         Delete Route
                                     </div>
                                 </div>
                             </div>
                         </div>
  
-                        {/* Metadata Badges with custom hovers */}
+                        {/* Metadata Badges */}
                         <div className="flex flex-wrap gap-1.5 mt-2">
                             {/* Questions Count Badge */}
-                            <div className="relative group">
-                                <span className="px-2 py-0.5 bg-blue-50 dark:bg-blue-950/20 text-blue-600 dark:text-blue-400 text-[10px] font-bold rounded border border-blue-100/50 dark:border-blue-900/20 flex items-center gap-1 shrink-0">
-                                    <i className="fas fa-question-circle"></i> {interview.questions?.length || (((interview as any).manualQuestions?.length || 0) + ((interview as any).numQuestions || 5))} Qs
-                                </span>
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                    Questions: {interview.questions?.length || (((interview as any).manualQuestions?.length || 0) + ((interview as any).numQuestions || 5))}
-                                </div>
-                            </div>
+                            <span className="px-2.5 py-1 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-lg border border-blue-200 dark:border-blue-900/30 flex items-center gap-1.5 shrink-0" title="Total interview questions">
+                                <i className="fas fa-question-circle text-[11px]"></i> {interview.questions?.length || (((interview as any).manualQuestions?.length || 0) + ((interview as any).numQuestions || 5))} Qs
+                            </span>
 
                             {/* Level Badge */}
-                            <div className="relative group">
-                                <span className="px-2 py-0.5 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400 text-[10px] font-bold rounded border border-purple-100/50 dark:border-purple-900/20 flex items-center gap-1 shrink-0" title="Assessment challenge difficulty level">
-                                    <i className="fas fa-brain"></i> {interview.difficulty || "Medium"}
-                                </span>
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                    Difficulty: {interview.difficulty || "Medium"}
-                                </div>
-                            </div>
+                            <span className="px-2.5 py-1 bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 text-xs font-bold rounded-lg border border-purple-200 dark:border-purple-900/30 flex items-center gap-1.5 shrink-0" title="Assessment challenge difficulty level">
+                                <i className="fas fa-brain text-[11px]"></i> {interview.difficulty || "Medium"}
+                            </span>
 
                             {/* Strictness Badge */}
                             {interview.strictness && (
-                                <div className="relative group">
-                                    <span className="px-2 py-0.5 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-[10px] font-bold rounded border border-red-100/50 dark:border-red-900/20 flex items-center gap-1 shrink-0" title="AI Proctoring monitoring level active">
-                                        <i className="fas fa-shield-alt"></i> {interview.strictness}
-                                    </span>
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                        Proctoring: {interview.strictness}
-                                    </div>
-                                </div>
+                                <span className="px-2.5 py-1 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 text-xs font-bold rounded-lg border border-red-200 dark:border-red-900/30 flex items-center gap-1.5 shrink-0" title="AI Proctoring monitoring level active">
+                                    <i className="fas fa-shield-alt text-[11px]"></i> {interview.strictness}
+                                </span>
                             )}
 
                             {/* Responses count / limit Badge */}
-                            <div className="relative group">
-                                <span className={`px-2 py-0.5 text-[10px] font-bold rounded border flex items-center gap-1 shrink-0 ${
-                                    interview.maxResponses && (submissionsMap[interview.id]?.length || 0) >= Number(interview.maxResponses)
-                                        ? 'bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 border-red-100/50 dark:border-red-900/20'
-                                        : 'bg-emerald-50 dark:bg-emerald-950/20 text-emerald-600 dark:text-emerald-400 border-emerald-100/50 dark:border-emerald-900/20'
-                                }`}>
-                                    <i className="fas fa-users"></i> Responses: {submissionsMap[interview.id]?.length || 0}
-                                    {interview.maxResponses ? ` / ${interview.maxResponses}` : ' (Unlimited)'}
-                                </span>
-                                <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded border border-zinc-800 dark:border-zinc-700 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                    Responses: {submissionsMap[interview.id]?.length || 0}
-                                    {interview.maxResponses ? ` Limit: ${interview.maxResponses}` : ' Limit: Unlimited'}
-                                </div>
-                            </div>
+                            <span className={`px-2.5 py-1 text-xs font-bold rounded-lg border flex items-center gap-1.5 shrink-0 ${
+                                interview.maxResponses && (submissionsMap[interview.id]?.length || 0) >= Number(interview.maxResponses)
+                                    ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-900/30'
+                                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-900/30'
+                            }`} title="Interview submission response count and capacity limit">
+                                <i className="fas fa-users text-[11px]"></i> Responses: {submissionsMap[interview.id]?.length || 0}
+                                {interview.maxResponses ? ` / ${interview.maxResponses}` : ' (Unlimited)'}
+                            </span>
                         </div>
  
-                        {/* Job Description (JD) with Scrollbar */}
-                        <div className="mt-4">
+                        {/* Job Description (JD) Box */}
+                        <div className="mt-3.5 bg-gray-50/70 dark:bg-zinc-950/50 border border-gray-100 dark:border-zinc-800/80 rounded-xl p-3">
                             <div className="flex justify-between items-center mb-1">
-                                <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500">
-                                    Job Description
+                                <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                    <i className="fas fa-file-alt"></i> Job Description
                                 </h4>
-                                <div className="relative group">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFullJdModal({ isOpen: true, title: interview.title, description: interview.description })}
-                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-0.5"
-                                        title="View full screen Job Description"
-                                    >
-                                        <i className="fas fa-expand-arrows-alt text-[9px]"></i>
-                                    </button>
-                                    <div className="absolute bottom-full right-0 mb-2 px-2 py-1 bg-gray-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                        Fullscreen JD
-                                    </div>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setFullJdModal({ isOpen: true, title: interview.title, description: interview.description })}
+                                    className="text-xs text-primary hover:text-primary-dark font-bold transition-colors flex items-center gap-1"
+                                    title="View full screen Job Description"
+                                >
+                                    <i className="fas fa-expand-arrows-alt text-[10px]"></i> Fullscreen
+                                </button>
                             </div>
-                            <div className="h-[75px] overflow-y-auto pr-1 text-xs text-gray-500 dark:text-gray-400 leading-relaxed custom-card-scrollbar">
+                            <div className="h-[70px] overflow-y-auto pr-1 text-xs text-gray-600 dark:text-gray-300 leading-relaxed custom-card-scrollbar">
                                 {interview.description || "No description provided."}
                             </div>
                         </div>
                     </div>
  
-                    {/* Middle: Candidate List */}
-                    <div className="flex-grow flex flex-col min-h-0 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+                    {/* Middle: Candidate Roster List */}
+                    <div className="flex-grow flex flex-col min-h-0 mt-3 pt-3 border-t border-gray-100 dark:border-zinc-800">
                         <div className="flex justify-between items-center mb-2">
-                            <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400 dark:text-gray-500 flex items-center gap-1.5">
-                                <span>Track Roster</span>
-                                <div className="relative group">
-                                    <button
-                                        type="button"
-                                        onClick={() => setFullRosterModal({ isOpen: true, interview })}
-                                        className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-0.5"
-                                        title="View full screen Track Roster with status search & invitation triggers"
-                                    >
-                                        <i className="fas fa-expand-arrows-alt text-[9px]"></i>
-                                    </button>
-                                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 dark:bg-zinc-800 text-white text-[9px] font-bold rounded shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50">
-                                        Fullscreen Roster
-                                    </div>
-                                </div>
+                            <h4 className="text-[10px] font-extrabold uppercase tracking-wider text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                <i className="fas fa-users-cog"></i> Track Roster
+                                <button
+                                    type="button"
+                                    onClick={() => setFullRosterModal({ isOpen: true, interview })}
+                                    className="ml-1 text-primary hover:underline text-[10px] font-bold"
+                                    title="View full screen Track Roster with status search & invitation triggers"
+                                >
+                                    (Fullscreen)
+                                </button>
                             </h4>
                             <span 
-                                className={submissionsMap[interview.id]?.length > 0 ? "text-emerald-600 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full text-[9px] font-extrabold border border-emerald-100 dark:border-emerald-900/20" : "text-gray-500 bg-gray-50 dark:bg-zinc-800 px-2 py-0.5 rounded-full text-[9px] font-extrabold border border-gray-100 dark:border-zinc-700/30"}
-                                title="Total candidate submissions received for this interview"
+                                className={submissionsMap[interview.id]?.length > 0 ? "text-emerald-700 dark:text-emerald-300 bg-emerald-100/80 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-emerald-200 dark:border-emerald-800" : "text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-zinc-800 px-2 py-0.5 rounded-full text-[10px] font-extrabold border border-gray-200 dark:border-zinc-700"}
+                                title="Total candidate submissions received"
                             >
-                                {submissionsMap[interview.id]?.length || 0} Responses
+                                {submissionsMap[interview.id]?.length || 0} Submissions
                             </span>
                         </div>
-                        <div className="flex-grow overflow-y-auto pr-1 space-y-1.5 custom-card-scrollbar max-h-[140px]">
+                        <div className="flex-grow overflow-y-auto pr-1 space-y-1.5 custom-card-scrollbar max-h-[135px]">
                             {(() => {
                                 const explicitEmails = (interview.candidateEmails || []).map(e => e.toLowerCase());
                                 const submissions = submissionsMap[interview.id] || [];
                                 const unifiedList: {email: string, hasSubmitted: boolean, attemptId?: string, allowReattempt?: boolean}[] = [];
                                 
-                                // 1. Add all actual submissions (invited or uninvited)
+                                // 1. Add all actual submissions
                                 submissions.forEach(sub => {
                                     unifiedList.push({ 
                                         email: sub.candidateInfo?.email || 'N/A', 
@@ -945,37 +1053,37 @@ Output format (MUST be valid JSON):
                                 });
 
                                 if (unifiedList.length === 0) {
-                                    return <p className="text-[11px] text-gray-400 italic block py-4 text-center">No candidates invited yet.</p>;
+                                    return <p className="text-xs text-gray-400 dark:text-zinc-500 italic block py-4 text-center">No candidates invited yet.</p>;
                                 }
 
                                 return unifiedList.map((cand, idx) => (
-                                    <div key={idx} className="flex justify-between items-center bg-gray-50 dark:bg-black/20 text-[11px] rounded-lg px-2.5 py-1.5 border border-gray-100 dark:border-white/5">
-                                        <span className="font-medium text-gray-700 dark:text-gray-300 truncate max-w-[120px] lg:max-w-[140px]" title={cand.email}>
+                                    <div key={idx} className="flex justify-between items-center bg-gray-50/80 dark:bg-zinc-950/60 text-xs rounded-xl px-3 py-1.5 border border-gray-100 dark:border-zinc-800/80">
+                                        <span className="font-semibold text-gray-800 dark:text-gray-200 truncate max-w-[130px] lg:max-w-[150px]" title={cand.email}>
                                             {cand.email}
                                         </span>
                                         {cand.hasSubmitted ? (
                                             <div className="flex items-center gap-1.5 shrink-0">
-                                                <span className="text-green-600 dark:text-green-400 font-bold flex items-center gap-1">
-                                                    <i className="fas fa-check-circle"></i> Submitted
+                                                <span className="text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1 text-[11px]">
+                                                    <i className="fas fa-check-circle text-[10px]"></i> Submitted
                                                 </span>
                                                 <button
                                                     type="button"
                                                     onClick={() => handleAllowReattempt(interview.id, cand.attemptId!, cand.allowReattempt || false)}
-                                                    className={`inline-flex items-center gap-0.5 px-1 py-0.5 border rounded text-[9px] font-bold transition-all ${
+                                                    className={`inline-flex items-center gap-1 px-2 py-0.5 border rounded-lg text-[10px] font-bold transition-all ${
                                                         cand.allowReattempt 
-                                                            ? 'bg-purple-100 dark:bg-purple-950/40 text-purple-700 dark:text-purple-400 border-purple-300 dark:border-purple-800/50' 
-                                                            : 'bg-gray-100 dark:bg-zinc-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-zinc-700'
+                                                            ? 'bg-purple-100 dark:bg-purple-950/50 text-purple-700 dark:text-purple-300 border-purple-300 dark:border-purple-800' 
+                                                            : 'bg-white dark:bg-zinc-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-zinc-700 hover:bg-gray-100'
                                                     }`}
-                                                    title={cand.allowReattempt ? "Remove Reattempt Chance" : "Give Reattempt Chance"}
+                                                    title={cand.allowReattempt ? "Remove Reattempt Permission" : "Grant Reattempt Permission"}
                                                 >
-                                                    <i className="fas fa-redo text-[8px]"></i>
+                                                    <i className="fas fa-redo text-[9px]"></i>
                                                     <span>{cand.allowReattempt ? 'Allowed' : 'Reattempt'}</span>
                                                 </button>
                                             </div>
                                         ) : (
                                             <div className="flex items-center gap-1.5 shrink-0">
-                                                <span className="text-yellow-600 dark:text-yellow-500 font-semibold flex items-center gap-1">
-                                                    <i className="fas fa-clock"></i> Pending
+                                                <span className="text-amber-600 dark:text-amber-400 font-bold flex items-center gap-1 text-[11px]">
+                                                    <i className="fas fa-clock text-[10px]"></i> Pending
                                                 </span>
                                                 <button
                                                     type="button"
@@ -992,10 +1100,10 @@ Output format (MUST be valid JSON):
                                                             interview: interview
                                                         });
                                                     }}
-                                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40 rounded text-[9px] font-extrabold transition-all"
-                                                    title="Invite via WhatsApp Web"
+                                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 rounded-lg text-[10px] font-bold transition-all"
+                                                    title="Send WhatsApp Invite via WasenderAPI"
                                                 >
-                                                    <i className="fab fa-whatsapp"></i>
+                                                    <i className="fab fa-whatsapp text-[11px]"></i>
                                                     <span>Invite</span>
                                                 </button>
                                             </div>
@@ -1006,28 +1114,28 @@ Output format (MUST be valid JSON):
                         </div>
                     </div>
 
-                    {/* Bottom: Divider & Call to Actions */}
-                    <div className="border-t border-gray-100 dark:border-white/5 pt-3 mt-3">
-                        <div className="flex items-center gap-2 mb-2">
+                    {/* Bottom: Action CTAs & Metadata */}
+                    <div className="border-t border-gray-100 dark:border-zinc-800 pt-3 mt-3">
+                        <div className="flex items-center gap-2 mb-2.5">
                             <button
                                 type="button"
                                 onClick={() => openInviteModal(interview)}
-                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all transform hover:-translate-y-0.5 active:translate-y-0"
+                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0"
                             >
                                 <i className="fas fa-user-plus text-xs"></i>
                                 <span>Invite Candidates</span>
                             </button>
                             <Link
                                 to={`/recruiter/interview/responses/${interview.id}`}
-                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-xl shadow-sm hover:shadow transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-center"
+                                className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold rounded-xl shadow-md hover:shadow-lg transition-all transform hover:-translate-y-0.5 active:translate-y-0 text-center"
                             >
                                 <i className="fas fa-eye text-xs"></i>
                                 <span>View Responses</span>
                             </Link>
                         </div>
-                        <div className="flex justify-between items-center text-[9px] text-gray-400 dark:text-gray-500 font-medium px-0.5">
+                        <div className="flex justify-between items-center text-[10px] text-gray-500 dark:text-gray-400 font-medium px-1">
                             <span>Created: {interview.createdAt?.toDate ? interview.createdAt.toDate().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : 'N/A'}</span>
-                            <span className="font-mono">ID: #{interview.id.substring(0, 8)}</span>
+                            <span className="font-mono text-gray-600 dark:text-gray-300 font-bold bg-gray-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">ID: #{interview.id.substring(0, 8)}</span>
                         </div>
                     </div>
 
@@ -1173,7 +1281,7 @@ Output format (MUST be valid JSON):
                     </div>
                     
                     {/* Search & Suggest from Database */}
-                    <div className="border-t border-gray-200 dark:border-gray-700/60 pt-4 space-y-4 text-gray-900 dark:text-white">
+                    <div className="border-t border-gray-200 dark:border-zinc-800 pt-4 space-y-4 text-gray-900 dark:text-white">
                         <div>
                             <label className="block text-sm font-semibold mb-2 flex items-center gap-1.5 text-gray-700 dark:text-gray-300">
                                 <i className="fas fa-search text-gray-400"></i> Search Candidate Database
@@ -1183,27 +1291,31 @@ Output format (MUST be valid JSON):
                                 value={candSearchQuery}
                                 onChange={(e) => setCandSearchQuery(e.target.value)}
                                 placeholder="Search by name, email, or skill..."
-                                className="w-full p-2.5 border rounded-xl bg-white dark:bg-gray-700/50 border-gray-300 dark:border-gray-650 text-sm outline-none text-gray-900 dark:text-white"
+                                className="w-full p-2.5 border rounded-xl bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 text-sm outline-none text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/50 transition-all placeholder:text-gray-400 dark:placeholder:text-zinc-500"
                             />
                             {candSearchQuery.trim() && (
-                                <div className="mt-2 border border-gray-200 dark:border-gray-700 rounded-xl max-h-[150px] overflow-y-auto divide-y divide-gray-100 dark:divide-gray-700/60 bg-white dark:bg-gray-800">
+                                <div className="mt-2 border border-gray-200 dark:border-zinc-800 rounded-xl max-h-[160px] overflow-y-auto divide-y divide-gray-100 dark:divide-zinc-800 bg-white dark:bg-zinc-900 shadow-lg">
                                     {searchedCandidates.length === 0 ? (
-                                        <p className="p-3 text-xs text-gray-500 italic">No candidates found matching query.</p>
+                                        <p className="p-3 text-xs text-gray-500 dark:text-zinc-400 italic">No candidates found matching query.</p>
                                     ) : (
                                         searchedCandidates.map(cand => {
                                             const isAdded = newEmails.includes(cand.email) || (selectedInterview?.candidateEmails || []).includes(cand.email);
                                             return (
-                                                <div key={cand.id} className="flex justify-between items-center p-3 text-xs">
-                                                    <div>
-                                                        <p className="font-bold">{cand.name}</p>
-                                                        <p className="text-gray-455 dark:text-gray-400">{cand.email} &bull; {cand.experienceYears} Yrs</p>
+                                                <div key={cand.id} className="flex justify-between items-center p-3 text-xs hover:bg-gray-50 dark:hover:bg-zinc-800/50 transition-colors">
+                                                    <div className="min-w-0 pr-2">
+                                                        <p className="font-bold text-gray-900 dark:text-white truncate">{cand.name}</p>
+                                                        <p className="text-gray-500 dark:text-zinc-400 truncate">{cand.email} &bull; {cand.experienceYears} Yrs</p>
                                                     </div>
                                                     <button
                                                         onClick={() => addDbCandidateToInvite(cand)}
                                                         disabled={isAdded}
-                                                        className={`px-2.5 py-1 rounded-lg text-[10px] font-semibold border transition-all ${isAdded ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-200 dark:border-gray-600' : 'bg-primary hover:bg-primary-dark text-white dark:text-black border-primary'}`}
+                                                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 shrink-0 ${
+                                                            isAdded 
+                                                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 cursor-default' 
+                                                                : 'bg-primary hover:bg-primary-dark text-white border border-primary shadow-sm hover:shadow-md active:scale-95'
+                                                        }`}
                                                     >
-                                                        {isAdded ? 'Added' : <><i className="fas fa-plus mr-1"></i> Add</>}
+                                                        {isAdded ? <><i className="fas fa-check text-[10px]"></i> Added</> : <><i className="fas fa-plus text-[10px]"></i> Add</>}
                                                     </button>
                                                 </div>
                                             );
@@ -1214,32 +1326,46 @@ Output format (MUST be valid JSON):
                         </div>
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                                <i className="fas fa-magic text-yellow-500 animate-pulse"></i> Suggested Database Matches
+                            <label className="block text-xs font-bold text-gray-500 dark:text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                <i className="fas fa-magic text-amber-500 animate-pulse"></i> Suggested Database Matches
                             </label>
                             {suggestedCandidates.length === 0 ? (
-                                <p className="text-xs text-gray-500 italic p-3 bg-gray-50 dark:bg-gray-800/40 border border-gray-100 dark:border-gray-700 rounded-xl">
+                                <p className="text-xs text-gray-500 dark:text-zinc-400 italic p-3 bg-gray-50 dark:bg-zinc-900/60 border border-gray-200 dark:border-zinc-800 rounded-xl">
                                     No database candidates match this interview's specifications.
                                 </p>
                             ) : (
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                                     {suggestedCandidates.map(cand => {
                                         const isAdded = newEmails.includes(cand.email) || (selectedInterview?.candidateEmails || []).includes(cand.email);
+                                        
+                                        let matchBadgeStyle = "bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700";
+                                        if (cand.matchScore >= 70) {
+                                            matchBadgeStyle = "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30";
+                                        } else if (cand.matchScore >= 40) {
+                                            matchBadgeStyle = "bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30";
+                                        }
+
                                         return (
-                                            <div key={cand.id} className="flex justify-between items-center p-3 text-xs bg-gray-50 dark:bg-gray-850/40 border border-gray-100 dark:border-gray-700 rounded-xl">
-                                                <div className="flex-1 min-w-0">
-                                                    <p className="font-bold truncate text-gray-900 dark:text-white" title={cand.name}>{cand.name}</p>
-                                                    <p className="text-[10px] text-gray-400 truncate" title={cand.email}>{cand.email}</p>
-                                                    <span className="mt-1 inline-block text-[9px] font-bold text-green-600 dark:text-green-400">
-                                                        {cand.matchScore}% Match
-                                                    </span>
+                                            <div key={cand.id} className="flex justify-between items-center p-3 text-xs bg-white dark:bg-zinc-900 border border-gray-200 dark:border-zinc-800/80 rounded-xl shadow-xs hover:border-gray-300 dark:hover:border-zinc-700 transition-all">
+                                                <div className="flex-1 min-w-0 pr-2">
+                                                    <p className="font-bold truncate text-gray-900 dark:text-white text-sm" title={cand.name}>{cand.name}</p>
+                                                    <p className="text-xs text-gray-500 dark:text-zinc-400 truncate mt-0.5" title={cand.email}>{cand.email}</p>
+                                                    <div className="mt-1.5">
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${matchBadgeStyle}`}>
+                                                            {cand.matchScore}% Match
+                                                        </span>
+                                                    </div>
                                                 </div>
                                                 <button
                                                     onClick={() => addDbCandidateToInvite(cand)}
                                                     disabled={isAdded}
-                                                    className={`px-2 py-1 rounded-lg text-[9px] font-semibold border transition-all ${isAdded ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 border-gray-205 dark:border-gray-700' : 'bg-primary hover:bg-primary-dark text-white dark:text-black border-primary'}`}
+                                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shrink-0 ${
+                                                        isAdded 
+                                                            ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 cursor-default' 
+                                                            : 'bg-primary hover:bg-primary-dark text-white border border-primary shadow-sm hover:shadow-md active:scale-95'
+                                                    }`}
                                                 >
-                                                    {isAdded ? 'Added' : <i className="fas fa-plus text-[8px]"></i>}
+                                                    {isAdded ? <><i className="fas fa-check text-[10px]"></i> Added</> : <><i className="fas fa-plus text-[10px]"></i> Add</>}
                                                 </button>
                                             </div>
                                         );
@@ -1283,18 +1409,79 @@ Output format (MUST be valid JSON):
                                         );
                                     }
 
+                                    const isEditingNew = editingNewCandidateEmail === email;
+                                    const currentPhone = parsedData?.phone && parsedData.phone !== 'N/A' ? parsedData.phone : '';
+
                                     return (
-                                        <div key={email} className="flex items-start justify-between text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 shadow-sm transition-colors hover:border-gray-300 dark:hover:border-gray-500">
-                                            <div className="flex flex-col">
-                                                <span className="font-semibold text-gray-900 dark:text-white mb-0.5">{email}</span>
-                                                {parsedData?.phone && parsedData.phone !== 'N/A' && (
-                                                    <span className="text-xs text-blue-600 dark:text-blue-400 font-mono flex items-center gap-1.5"><i className="fas fa-phone-alt"></i>{parsedData.phone}</span>
-                                                )}
-                                                {ScoreBadge}
-                                            </div>
-                                            <button onClick={() => handleRemoveNewEmail(email)} className="text-gray-400 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700" title="Remove Candidate">
-                                                <i className="fas fa-trash-alt"></i>
-                                            </button>
+                                        <div key={email} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm bg-gray-50 dark:bg-zinc-900/60 border border-gray-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-xs transition-colors">
+                                            {isEditingNew ? (
+                                                <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                                                    <div className="flex-1 flex flex-col gap-1.5">
+                                                        <input 
+                                                            type="email" 
+                                                            value={editedNewEmailVal} 
+                                                            onChange={(e) => setEditedNewEmailVal(e.target.value)} 
+                                                            placeholder="Candidate Email"
+                                                            className="w-full p-2 text-xs border rounded-lg bg-white dark:bg-zinc-950 border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                                                            autoFocus
+                                                        />
+                                                        <input 
+                                                            type="tel" 
+                                                            value={editedNewPhoneVal} 
+                                                            onChange={(e) => setEditedNewPhoneVal(e.target.value)} 
+                                                            placeholder="Phone Number (e.g. 9876543210)"
+                                                            className="w-full p-2 text-xs border rounded-lg bg-white dark:bg-zinc-950 border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                                        <button 
+                                                            onClick={() => handleSaveNewCandidateEdit(email)}
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1"
+                                                            title="Save email & phone before sending invite"
+                                                        >
+                                                            <i className="fas fa-save"></i> Save
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setEditingNewCandidateEmail(null)}
+                                                            className="bg-gray-200 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-2.5 py-2 rounded-lg text-xs font-bold hover:bg-gray-300 dark:hover:bg-zinc-700"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex flex-col">
+                                                        <span className="font-semibold text-gray-900 dark:text-white mb-0.5">{email}</span>
+                                                        {currentPhone ? (
+                                                            <span className="text-xs text-blue-600 dark:text-blue-400 font-mono flex items-center gap-1.5"><i className="fas fa-phone-alt"></i>{currentPhone}</span>
+                                                        ) : (
+                                                            <span className="text-[11px] text-gray-400 dark:text-zinc-500 italic mt-0.5">No contact phone added</span>
+                                                        )}
+                                                        {ScoreBadge}
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        <button 
+                                                            onClick={() => {
+                                                                setEditingNewCandidateEmail(email);
+                                                                setEditedNewEmailVal(email);
+                                                                setEditedNewPhoneVal(currentPhone);
+                                                            }}
+                                                            className="p-2 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors" 
+                                                            title="Edit candidate email & contact phone before sending invite"
+                                                        >
+                                                            <i className="fas fa-pencil-alt text-xs"></i>
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleRemoveNewEmail(email)} 
+                                                            className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors" 
+                                                            title="Remove Candidate"
+                                                        >
+                                                            <i className="fas fa-trash-alt text-xs"></i>
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -1308,52 +1495,96 @@ Output format (MUST be valid JSON):
                                 {selectedInterview.candidateEmails.map((email) => {
                                     const isEditing = editingCandidateEmail === email;
                                     const isResending = resendingEmail === email;
+                                    const candInfo = (selectedInterview as any).candidateData?.find((c: any) => c.email?.toLowerCase() === email.toLowerCase()) || {};
+                                    const currentPhone = candInfo.phone && candInfo.phone !== 'N/A' ? candInfo.phone : '';
                                     
                                     return (
-                                        <div key={email} className="flex items-center justify-between text-sm bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-600 rounded-lg px-4 py-3 shadow-sm">
+                                        <div key={email} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-sm bg-gray-50 dark:bg-zinc-900/60 border border-gray-200 dark:border-zinc-800 rounded-xl p-3.5 shadow-xs">
                                             {isEditing ? (
-                                                <div className="flex-1 flex gap-2 mr-2">
-                                                    <input 
-                                                        type="email" 
-                                                        value={editedEmailValue} 
-                                                        onChange={(e) => setEditedEmailValue(e.target.value)} 
-                                                        className="w-full p-1.5 text-sm border rounded bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-1 focus:ring-primary"
-                                                        autoFocus
-                                                    />
-                                                    <button 
-                                                        onClick={() => handleEditAndResend(email, editedEmailValue)}
-                                                        disabled={resendingEmail !== null}
-                                                        className="bg-green-500 text-white px-3 py-1.5 rounded text-xs font-semibold hover:bg-green-600 disabled:opacity-50 flex items-center gap-1 shrink-0"
-                                                    >
-                                                        {isResending ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>} Save
-                                                    </button>
-                                                    <button 
-                                                        onClick={() => setEditingCandidateEmail(null)}
-                                                        disabled={resendingEmail !== null}
-                                                        className="bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-200 px-3 py-1.5 rounded text-xs font-semibold hover:bg-gray-300 dark:hover:bg-gray-500 shrink-0"
-                                                    >
-                                                        Cancel
-                                                    </button>
+                                                <div className="flex-1 flex flex-col sm:flex-row gap-2">
+                                                    <div className="flex-1 flex flex-col gap-1.5">
+                                                        <input 
+                                                            type="email" 
+                                                            value={editedEmailValue} 
+                                                            onChange={(e) => setEditedEmailValue(e.target.value)} 
+                                                            placeholder="Candidate Email"
+                                                            className="w-full p-2 text-xs border rounded-lg bg-white dark:bg-zinc-950 border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                                                            autoFocus
+                                                        />
+                                                        <input 
+                                                            type="tel" 
+                                                            value={editedPhoneValue} 
+                                                            onChange={(e) => setEditedPhoneValue(e.target.value)} 
+                                                            placeholder="Phone Number (e.g. 9876543210)"
+                                                            className="w-full p-2 text-xs border rounded-lg bg-white dark:bg-zinc-950 border-gray-300 dark:border-zinc-700 text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-primary/40"
+                                                        />
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
+                                                        <button 
+                                                            onClick={() => handleEditAndSaveCandidateInvite(email, editedEmailValue, editedPhoneValue, false)}
+                                                            disabled={resendingEmail !== null}
+                                                            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1"
+                                                            title="Save candidate changes"
+                                                        >
+                                                            {isResending ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-save"></i>} Save
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleEditAndSaveCandidateInvite(email, editedEmailValue, editedPhoneValue, true)}
+                                                            disabled={resendingEmail !== null}
+                                                            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-1"
+                                                            title="Save changes and resend invitation email & WhatsApp"
+                                                        >
+                                                            {isResending ? <i className="fas fa-spinner fa-spin"></i> : <i className="fas fa-paper-plane"></i>} Save & Resend
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => setEditingCandidateEmail(null)}
+                                                            disabled={resendingEmail !== null}
+                                                            className="bg-gray-200 dark:bg-zinc-800 text-gray-800 dark:text-gray-200 px-2.5 py-2 rounded-lg text-xs font-bold hover:bg-gray-300 dark:hover:bg-zinc-700"
+                                                        >
+                                                            Cancel
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <>
-                                                    <span className="font-medium text-gray-900 dark:text-white truncate max-w-[200px]" title={email}>{email}</span>
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex flex-col min-w-0">
+                                                        <span className="font-bold text-gray-900 dark:text-white truncate max-w-[220px]" title={email}>{email}</span>
+                                                        {currentPhone ? (
+                                                            <span className="text-xs text-blue-600 dark:text-blue-400 font-mono font-bold flex items-center gap-1.5 mt-0.5">
+                                                                <i className="fas fa-phone-alt text-[10px]"></i>{currentPhone}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-[11px] text-gray-400 dark:text-zinc-500 italic mt-0.5">No phone contact saved</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 shrink-0">
                                                         <button 
-                                                            onClick={() => { setEditingCandidateEmail(email); setEditedEmailValue(email); }}
+                                                            onClick={() => { 
+                                                                setEditingCandidateEmail(email); 
+                                                                setEditedEmailValue(email); 
+                                                                setEditedPhoneValue(currentPhone);
+                                                            }}
                                                             disabled={resendingEmail !== null}
-                                                            className="text-gray-500 hover:text-blue-500 transition-colors p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700" 
-                                                            title="Edit Email & Resend"
+                                                            className="p-2 text-amber-600 hover:text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors" 
+                                                            title="Edit Candidate Email & Phone"
                                                         >
                                                             <i className="fas fa-pencil-alt text-xs"></i>
                                                         </button>
                                                         <button 
                                                             onClick={() => handleResend(email)}
                                                             disabled={resendingEmail !== null}
-                                                            className="text-gray-500 hover:text-green-500 transition-colors p-1.5 rounded hover:bg-gray-200 dark:hover:bg-gray-700 flex items-center gap-1" 
-                                                            title="Resend Invitation"
+                                                            className="p-2 text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 rounded-lg transition-colors flex items-center gap-1" 
+                                                            title="Resend Invitation Email & WhatsApp"
                                                         >
                                                             {isResending ? <i className="fas fa-spinner fa-spin text-xs"></i> : <i className="fas fa-paper-plane text-xs"></i>}
+                                                        </button>
+                                                        <button 
+                                                            onClick={() => handleDeleteCandidateInvite(email)}
+                                                            disabled={resendingEmail !== null}
+                                                            className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors" 
+                                                            title="Delete Candidate Invitation"
+                                                        >
+                                                            <i className="fas fa-trash-alt text-xs"></i>
                                                         </button>
                                                     </div>
                                                 </>
@@ -1486,18 +1717,14 @@ Output format (MUST be valid JSON):
                             } catch (err) {
                                 console.error("Error updating phone in Firestore:", err);
                             }
-                            
-                            // Open WhatsApp web
-                            const cleanedPhone = whatsappModal.phone.replace(/[^0-9]/g, '');
-                            let targetPhone = cleanedPhone;
-                            if (cleanedPhone.length === 10) {
-                                targetPhone = '91' + cleanedPhone;
+                            // Send WhatsApp message directly via WasenderAPI
+                            const waResult = await sendWhatsAppMessage(whatsappModal.phone, whatsappModal.message);
+                            setWhatsappModal({ isOpen: false, email: '', phone: '', message: '' });
+                            if (waResult.success) {
+                                messageBox.showSuccess("WhatsApp invite sent successfully via WasenderAPI!");
+                            } else {
+                                messageBox.showError(`Failed to send WhatsApp invite: ${waResult.error || 'Unknown error'}`);
                             }
-                            
-                            const waUrl = `https://web.whatsapp.com/send?phone=${targetPhone}&text=${encodeURIComponent(whatsappModal.message)}`;
-                            window.open(waUrl, '_blank');
-                            setWhatsappModal(null);
-                            messageBox.showSuccess("Redirecting to WhatsApp Web...");
                         }}
                         className="px-5 py-2 text-sm font-bold text-white bg-emerald-600 hover:bg-emerald-500 rounded-lg shadow-lg shadow-emerald-500/20 transition-all flex items-center gap-2"
                     >

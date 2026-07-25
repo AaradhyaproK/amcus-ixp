@@ -162,7 +162,7 @@ const AuthPage: React.FC = () => {
                   className="flex items-center gap-2.5 mb-5 bg-zinc-100/80 dark:bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-200 dark:border-zinc-800 w-fit cursor-pointer hover:bg-zinc-200/50 dark:hover:bg-zinc-900/60 transition-colors"
                 >
                   <img
-                    src="https://www.snab.co.in/assets/snab-nobg-CjMx88gi.png"
+                    src="/snab-nobg.png"
                     alt="SNAB Logo"
                     className="h-7 w-auto object-contain"
                   />
@@ -405,7 +405,7 @@ const AuthPage: React.FC = () => {
                   className="flex items-center gap-3.5 mb-6 opacity-0 w-fit cursor-pointer hover:opacity-90 transition-opacity"
                 >
                   <img
-                    src="https://www.snab.co.in/assets/snab-nobg-CjMx88gi.png"
+                    src="/snab-nobg.png"
                     alt="SNAB Innovations Logo"
                     className="h-10 w-auto object-contain shadow-xl shadow-cyan-500/10"
                   />
